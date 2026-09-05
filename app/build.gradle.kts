@@ -28,6 +28,7 @@ android {
 dependencies {
     implementation(project(":core:designsystem"))
     implementation(project(":data:settings"))
+    implementation(project(":feature:settings"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)

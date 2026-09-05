@@ -1,0 +1,20 @@
+package com.civdevops.petcam.feature.settings
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
+@Composable
+fun SettingsRoute(
+    viewModel: SettingsViewModel = hiltViewModel(),
+) {
+    val uiState by
+    viewModel.uiState
+        .collectAsStateWithLifecycle()
+
+    SettingsScreen(
+        uiState = uiState,
+        onAction = viewModel::onAction,
+    )
+}
