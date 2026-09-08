@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="settings_title">Settings</string>
+
+    <string name="settings_camera">Camera</string>
+    <string name="settings_audio">Pet sounds</string>
+    <string name="settings_sharing">Sharing</string>
+    <string name="settings_experience">Experience</string>
+
+    <string name="settings_back">Back</string>
+    <string name="settings_retry">Retry</string>
+    <string name="settings_dismiss">Dismiss</string>
+
+    <string name="settings_load_failed">
+        Couldn\'t load settings.
+    </string>
+
+    <string name="settings_save_failed">
+        Couldn\'t save the setting. The previous value was restored.
+    </string>
+
+    <!-- Camera -->
+
+    <string name="settings_default_capture_mode">
+        Default capture mode
+    </string>
+
+    <string name="settings_photo">Photo</string>
+    <string name="settings_video">Video</string>
+
+    <string name="settings_default_lens">
+        Default camera
+    </string>
+
+    <string name="settings_back_camera">
+        Back camera
+    </string>
+
+    <string name="settings_front_camera">
+        Front camera
+    </string>
+
+    <string name="settings_flash">
+        Flash
+    </string>
+
+    <string name="settings_flash_off">Off</string>
+    <string name="settings_flash_on">On</string>
+    <string name="settings_flash_auto">Auto</string>
+
+    <string name="settings_video_quality">
+        Video quality
+    </string>
+
+    <string name="settings_quality_uhd">
+        Ultra HD
+    </string>
+
+    <string name="settings_quality_fhd">
+        Full HD
+    </string>
+
+    <string name="settings_quality_hd">HD</string>
+    <string name="settings_quality_sd">SD</string>
+
+    <string name="settings_record_audio">
+        Record microphone audio
+    </string>
+
+    <!-- Audio -->
+
+    <string name="settings_default_sound_category">
+        Default sound category
+    </string>
+
+    <string name="settings_category_dogs">Dogs</string>
+    <string name="settings_category_cats">Cats</string>
+    <string name="settings_category_whistles">Whistles</string>
+    <string name="settings_category_toys">Toys</string>
+    <string name="settings_category_other">Other</string>
+
+    <string name="settings_volume_mode">
+        Sound volume
+    </string>
+
+    <string name="settings_follow_device">
+        Follow device
+    </string>
+
+    <string name="settings_maximum_app_output">
+        Maximum app output
+    </string>
+
+    <string name="settings_custom_volume">
+        Custom
+    </string>
+
+    <string name="settings_custom_volume_percent">
+        Custom volume: %1$d%%
+    </string>
+
+    <string name="settings_loop_during_recording">
+        Loop sound while recording
+    </string>
+
+    <string name="settings_play_on_photo_capture">
+        Play sound when taking a photo
+    </string>
+
+    <!-- Sharing -->
+
+    <string name="settings_auto_open_share">
+        Open sharing after capture
+    </string>
+
+    <string name="settings_preferred_share_target">
+        Preferred quick-share app
+    </string>
+
+    <string name="settings_share_none">
+        No preference
+    </string>
+
+    <string name="settings_share_tiktok">TikTok</string>
+    <string name="settings_share_capcut">CapCut</string>
+    <string name="settings_share_instagram">Instagram</string>
+    <string name="settings_share_whatsapp">WhatsApp</string>
+
+    <!-- Experience -->
+
+    <string name="settings_keep_screen_awake">
+        Keep screen awake while recording
+    </string>
+
+    <string name="settings_haptics">
+        Haptic feedback
+    </string>
+
+    <string name="settings_show_only_app_media">
+        Show only Pet Cam media
+    </string>
+
+    <string name="settings_confirm_delete">
+        Confirm before deleting media
+    </string>
+
+</resources>
