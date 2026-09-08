@@ -90,10 +90,6 @@
         <option name="selectionMode" value="DROPDOWN" />
         <DialogSelection />
       </SelectionState>
-      <SelectionState runConfigName="All Tests">
-        <option name="selectionMode" value="DROPDOWN" />
-        <DialogSelection />
-      </SelectionState>
       <SelectionState runConfigName="SettingsScreenTest">
         <option name="selectionMode" value="DROPDOWN" />
         <DialogSelection />

@@ -2,8 +2,9 @@ package com.civdevops.petcam.domain.usecase.camera
 
 import com.civdevops.petcam.core.model.camera.CameraCapabilities
 import com.civdevops.petcam.core.model.camera.CameraLens
+import javax.inject.Inject
 
-class ResolveAvailableCameraLensUseCase {
+class ResolveAvailableCameraLensUseCase @Inject constructor() {
 
     operator fun invoke(
         preferredLens: CameraLens,

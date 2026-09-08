@@ -19,6 +19,7 @@ material3Adaptive = "1.3.0"
 lifecycle = "2.11.0"
 androidxTestCore = "1.7.0"
 androidxTestRunner = "1.7.0"
+camerax = "1.6.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -63,6 +64,11 @@ androidx-lifecycle-viewmodel-ktx = { module = "androidx.lifecycle:lifecycle-view
 androidx-hilt-lifecycle-viewmodel-compose = { module = "androidx.hilt:hilt-lifecycle-viewmodel-compose", version.ref = "androidxHilt" }
 androidx-compose-material3-adaptive = { module = "androidx.compose.material3.adaptive:adaptive", version.ref = "material3Adaptive" }
 
+androidx-camera-core = { module = "androidx.camera:camera-core", version.ref = "camerax" }
+androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
+androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
+androidx-camera-compose = { module = "androidx.camera:camera-compose", version.ref = "camerax"}
+androidx-camera-viewfinder-compose = { module = "androidx.camera.viewfinder:viewfinder-compose", version.ref = "camerax" }
 [plugins]
 
 android-application = { id = "com.android.application", version.ref = "agp" }

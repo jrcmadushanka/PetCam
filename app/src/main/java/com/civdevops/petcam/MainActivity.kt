@@ -5,19 +5,30 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.civdevops.petcam.camera.CameraPreviewHost
 import com.civdevops.petcam.core.designsystem.theme.PetCamTheme
-import com.civdevops.petcam.feature.settings.SettingsRoute
+import com.civdevops.petcam.data.camera.CameraXSession
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var cameraXSession: CameraXSession
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
-        super.onCreate(savedInstanceState)
+
+        super.onCreate(
+            savedInstanceState,
+        )
+
         enableEdgeToEdge()
+
         setContent {
             PetCamTheme {
-                SettingsRoute()
+                CameraPreviewHost(cameraXSession = cameraXSession)
             }
         }
     }
