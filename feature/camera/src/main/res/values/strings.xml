@@ -57,4 +57,8 @@
         No flash
     </string>
 
+    <string name="camera_capture_photo">Capture photo</string>
+    <string name="camera_capturing">Saving…</string>
+    <string name="camera_photo_saved">Photo saved</string>
+    <string name="camera_photo_failed">Couldn\'t save photo</string>
 </resources>

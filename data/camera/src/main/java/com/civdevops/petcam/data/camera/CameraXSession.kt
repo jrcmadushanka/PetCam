@@ -21,47 +21,37 @@ import com.civdevops.petcam.core.model.camera.CameraLens
 import com.civdevops.petcam.core.model.camera.CameraLensCapabilities
 import com.civdevops.petcam.core.model.camera.FlashMode
 import dagger.hilt.android.qualifiers.ApplicationContext
-import java.util.concurrent.TimeUnit
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.concurrent.TimeUnit
+import javax.inject.Inject
+import javax.inject.Singleton
+import java.lang.ref.WeakReference
 
 @Singleton
 class CameraXSession @Inject constructor(
-    @ApplicationContext
-    private val applicationContext: Context,
+    @ApplicationContext private val applicationContext: Context,
 ) {
 
-    private val _surfaceRequest =
-        MutableStateFlow<SurfaceRequest?>(null)
+    private val _surfaceRequest = MutableStateFlow<SurfaceRequest?>(null)
 
-    val surfaceRequest: StateFlow<SurfaceRequest?> =
-        _surfaceRequest.asStateFlow()
+    val surfaceRequest: StateFlow<SurfaceRequest?> = _surfaceRequest.asStateFlow()
 
-    private val _capabilities =
-        MutableStateFlow<CameraCapabilities?>(null)
+    private val _capabilities = MutableStateFlow<CameraCapabilities?>(null)
 
-    val capabilities: StateFlow<CameraCapabilities?> =
-        _capabilities.asStateFlow()
+    val capabilities: StateFlow<CameraCapabilities?> = _capabilities.asStateFlow()
 
-    private val previewUseCase =
-        Preview.Builder()
-            .build()
-            .apply {
-                setSurfaceProvider { request ->
-                    _surfaceRequest.value = request
-                }
+    private val previewUseCase = Preview.Builder().build().apply {
+            setSurfaceProvider { request ->
+                _surfaceRequest.value = request
             }
+        }
 
-    internal val imageCaptureUseCase =
-        ImageCapture.Builder()
-            .setCaptureMode(
-                ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY,
-            )
-            .build()
+    internal val imageCaptureUseCase = ImageCapture.Builder().setCaptureMode(
+            ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY,
+        ).build()
 
     internal var boundCamera: Camera? = null
         private set
@@ -69,56 +59,48 @@ class CameraXSession @Inject constructor(
     internal var boundLens: CameraLens? = null
         private set
 
-    private var cameraProvider:
-            ProcessCameraProvider? = null
+    private var cameraProvider: ProcessCameraProvider? = null
+
+    private var lifecycleOwnerRef: WeakReference<LifecycleOwner>? = null
 
     @MainThread
-    suspend fun discoverCapabilities():
-            CameraCapabilities? {
+    suspend fun discoverCapabilities(): CameraCapabilities? {
 
         _capabilities.value?.let {
             return it
         }
 
         return try {
-            val provider =
-                obtainCameraProvider()
+            val provider = obtainCameraProvider()
 
-            val lenses =
-                buildMap {
-                    CameraLens.entries.forEach { lens ->
-                        val selector =
-                            lens.toCameraSelector()
+            val lenses = buildMap {
+                CameraLens.entries.forEach { lens ->
+                    val selector = lens.toCameraSelector()
 
-                        if (
-                            provider.hasCamera(
-                                selector,
-                            )
-                        ) {
-                            val cameraInfo =
-                                provider.getCameraInfo(
-                                    selector,
-                                )
+                    if (provider.hasCamera(
+                            selector,
+                        )
+                    ) {
+                        val cameraInfo = provider.getCameraInfo(
+                            selector,
+                        )
 
-                            put(
-                                lens,
-                                CameraLensCapabilities(
-                                    flashSupported =
-                                        cameraInfo
-                                            .hasFlashUnit(),
+                        put(
+                            lens,
+                            CameraLensCapabilities(
+                                flashSupported = cameraInfo.hasFlashUnit(),
 
-                                    /*
-                                     * Phase 5 populates this
-                                     * from CameraX video
-                                     * quality capabilities.
-                                     */
-                                    supportedVideoQualities =
-                                        emptySet(),
-                                ),
-                            )
-                        }
+                                /*
+                                 * Phase 5 populates this
+                                 * from CameraX video
+                                 * quality capabilities.
+                                 */
+                                supportedVideoQualities = emptySet(),
+                            ),
+                        )
                     }
                 }
+            }
 
             if (lenses.isEmpty()) {
                 null
@@ -130,8 +112,7 @@ class CameraXSession @Inject constructor(
                 }
             }
         } catch (
-            cancellation: CancellationException,
-        ) {
+            cancellation: CancellationException, ) {
             throw cancellation
         } catch (_: Exception) {
             null
@@ -144,24 +125,17 @@ class CameraXSession @Inject constructor(
         lens: CameraLens,
     ): CameraSessionBindResult {
 
-        if (
-            lifecycleOwner.lifecycle.currentState ==
-            Lifecycle.State.DESTROYED
-        ) {
-            return CameraSessionBindResult
-                .INVALID_STATE
+        if (lifecycleOwner.lifecycle.currentState == Lifecycle.State.DESTROYED) {
+            return CameraSessionBindResult.INVALID_STATE
         }
 
         return try {
-            val provider =
-                obtainCameraProvider()
+            val provider = obtainCameraProvider()
 
-            val selector =
-                lens.toCameraSelector()
+            val selector = lens.toCameraSelector()
 
             if (!provider.hasCamera(selector)) {
-                return CameraSessionBindResult
-                    .LENS_UNAVAILABLE
+                return CameraSessionBindResult.LENS_UNAVAILABLE
             }
 
             provider.unbind(
@@ -178,57 +152,42 @@ class CameraXSession @Inject constructor(
              * The requested effective flash mode
              * is applied immediately afterwards.
              */
-            imageCaptureUseCase.flashMode =
-                ImageCapture.FLASH_MODE_OFF
+            imageCaptureUseCase.flashMode = ImageCapture.FLASH_MODE_OFF
 
-            boundCamera =
-                provider.bindToLifecycle(
-                    lifecycleOwner,
-                    selector,
-                    previewUseCase,
-                    imageCaptureUseCase,
-                )
+            boundCamera = provider.bindToLifecycle(
+                lifecycleOwner,
+                selector,
+                previewUseCase,
+                imageCaptureUseCase,
+            )
 
             boundLens = lens
+            lifecycleOwnerRef = WeakReference(lifecycleOwner)
 
             CameraSessionBindResult.SUCCESS
         } catch (
-            cancellation: CancellationException,
-        ) {
+            cancellation: CancellationException, ) {
             throw cancellation
         } catch (
-            _: InitializationException,
-        ) {
-            CameraSessionBindResult
-                .CAMERA_UNAVAILABLE
+            _: InitializationException, ) {
+            CameraSessionBindResult.CAMERA_UNAVAILABLE
         } catch (
-            _: CameraUnavailableException,
-        ) {
-            CameraSessionBindResult
-                .CAMERA_UNAVAILABLE
+            _: CameraUnavailableException, ) {
+            CameraSessionBindResult.CAMERA_UNAVAILABLE
         } catch (
-            _: CameraInfoUnavailableException,
-        ) {
-            CameraSessionBindResult
-                .CAMERA_UNAVAILABLE
+            _: CameraInfoUnavailableException, ) {
+            CameraSessionBindResult.CAMERA_UNAVAILABLE
         } catch (
-            _: SecurityException,
-        ) {
-            CameraSessionBindResult
-                .CAMERA_UNAVAILABLE
+            _: SecurityException, ) {
+            CameraSessionBindResult.CAMERA_UNAVAILABLE
         } catch (
-            _: IllegalArgumentException,
-        ) {
-            CameraSessionBindResult
-                .LENS_UNAVAILABLE
+            _: IllegalArgumentException, ) {
+            CameraSessionBindResult.LENS_UNAVAILABLE
         } catch (
-            _: IllegalStateException,
-        ) {
-            CameraSessionBindResult
-                .INVALID_STATE
+            _: IllegalStateException, ) {
+            CameraSessionBindResult.INVALID_STATE
         } catch (
-            _: Exception,
-        ) {
+            _: Exception, ) {
             CameraSessionBindResult.UNKNOWN
         }
     }
@@ -238,25 +197,16 @@ class CameraXSession @Inject constructor(
         flashMode: FlashMode,
     ): CameraControlResult {
 
-        val camera =
-            boundCamera
-                ?: return CameraControlResult
-                    .INVALID_STATE
+        val camera = boundCamera ?: return CameraControlResult.INVALID_STATE
 
-        if (
-            flashMode != FlashMode.OFF &&
-            !camera.cameraInfo.hasFlashUnit()
-        ) {
-            imageCaptureUseCase.flashMode =
-                ImageCapture.FLASH_MODE_OFF
+        if (flashMode != FlashMode.OFF && !camera.cameraInfo.hasFlashUnit()) {
+            imageCaptureUseCase.flashMode = ImageCapture.FLASH_MODE_OFF
 
-            return CameraControlResult
-                .FLASH_UNAVAILABLE
+            return CameraControlResult.FLASH_UNAVAILABLE
         }
 
         return try {
-            imageCaptureUseCase.flashMode =
-                flashMode.toImageCaptureMode()
+            imageCaptureUseCase.flashMode = flashMode.toImageCaptureMode()
 
             CameraControlResult.SUCCESS
         } catch (_: Exception) {
@@ -272,65 +222,45 @@ class CameraXSession @Inject constructor(
         surfaceHeight: Float,
     ): CameraControlResult {
 
-        val camera =
-            boundCamera
-                ?: return CameraControlResult
-                    .INVALID_STATE
+        val camera = boundCamera ?: return CameraControlResult.INVALID_STATE
 
-        if (
-            surfaceWidth <= 0f ||
-            surfaceHeight <= 0f ||
-            !surfaceX.isFinite() ||
-            !surfaceY.isFinite()
-        ) {
-            return CameraControlResult
-                .INVALID_STATE
+        if (surfaceWidth <= 0f || surfaceHeight <= 0f || !surfaceX.isFinite() || !surfaceY.isFinite()) {
+            return CameraControlResult.INVALID_STATE
         }
 
         return try {
-            val factory =
-                SurfaceOrientedMeteringPointFactory(
+            val factory = SurfaceOrientedMeteringPointFactory(
+                surfaceWidth,
+                surfaceHeight,
+            )
+
+            val point = factory.createPoint(
+                surfaceX.coerceIn(
+                    0f,
                     surfaceWidth,
+                ),
+                surfaceY.coerceIn(
+                    0f,
                     surfaceHeight,
-                )
+                ),
+            )
 
-            val point =
-                factory.createPoint(
-                    surfaceX.coerceIn(
-                        0f,
-                        surfaceWidth,
-                    ),
-                    surfaceY.coerceIn(
-                        0f,
-                        surfaceHeight,
-                    ),
-                )
+            val action = FocusMeteringAction.Builder(
+                    point,
+                    FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE,
+                ).setAutoCancelDuration(
+                    3,
+                    TimeUnit.SECONDS,
+                ).build()
 
-            val action =
-                FocusMeteringAction
-                    .Builder(
-                        point,
-                        FocusMeteringAction.FLAG_AF or
-                                FocusMeteringAction.FLAG_AE,
-                    )
-                    .setAutoCancelDuration(
-                        3,
-                        TimeUnit.SECONDS,
-                    )
-                    .build()
-
-            if (
-                !camera.cameraInfo
-                    .isFocusMeteringSupported(
+            if (!camera.cameraInfo.isFocusMeteringSupported(
                         action,
                     )
             ) {
-                return CameraControlResult
-                    .FOCUS_UNSUPPORTED
+                return CameraControlResult.FOCUS_UNSUPPORTED
             }
 
-            camera.cameraControl
-                .startFocusAndMetering(
+            camera.cameraControl.startFocusAndMetering(
                     action,
                 )
 
@@ -344,11 +274,9 @@ class CameraXSession @Inject constructor(
     fun updateTargetRotation(
         rotation: Int,
     ) {
-        previewUseCase.targetRotation =
-            rotation
+        previewUseCase.targetRotation = rotation
 
-        imageCaptureUseCase.targetRotation =
-            rotation
+        imageCaptureUseCase.targetRotation = rotation
     }
 
     @MainThread
@@ -361,39 +289,34 @@ class CameraXSession @Inject constructor(
         boundCamera = null
         boundLens = null
         _surfaceRequest.value = null
+        lifecycleOwnerRef = null
     }
 
-    private suspend fun obtainCameraProvider():
-            ProcessCameraProvider =
-        cameraProvider
-            ?: ProcessCameraProvider
-                .awaitInstance(
-                    applicationContext,
-                )
-                .also {
-                    cameraProvider = it
-                }
+    @MainThread
+    suspend fun switchLens(lens: CameraLens): CameraSessionBindResult {
+        val lifecycleOwner = lifecycleOwnerRef?.get() ?: return CameraSessionBindResult.INVALID_STATE
 
-    private fun CameraLens.toCameraSelector():
-            CameraSelector =
-        when (this) {
-            CameraLens.BACK ->
-                CameraSelector.DEFAULT_BACK_CAMERA
+        return bind(lifecycleOwner, lens)
+    }
 
-            CameraLens.FRONT ->
-                CameraSelector.DEFAULT_FRONT_CAMERA
-        }
+    private suspend fun obtainCameraProvider(): ProcessCameraProvider =
+        cameraProvider ?: ProcessCameraProvider.awaitInstance(
+                applicationContext,
+            ).also {
+                cameraProvider = it
+            }
 
-    private fun FlashMode.toImageCaptureMode():
-            Int =
-        when (this) {
-            FlashMode.OFF ->
-                ImageCapture.FLASH_MODE_OFF
+    private fun CameraLens.toCameraSelector(): CameraSelector = when (this) {
+        CameraLens.BACK -> CameraSelector.DEFAULT_BACK_CAMERA
 
-            FlashMode.ON ->
-                ImageCapture.FLASH_MODE_ON
+        CameraLens.FRONT -> CameraSelector.DEFAULT_FRONT_CAMERA
+    }
 
-            FlashMode.AUTO ->
-                ImageCapture.FLASH_MODE_AUTO
-        }
+    private fun FlashMode.toImageCaptureMode(): Int = when (this) {
+        FlashMode.OFF -> ImageCapture.FLASH_MODE_OFF
+
+        FlashMode.ON -> ImageCapture.FLASH_MODE_ON
+
+        FlashMode.AUTO -> ImageCapture.FLASH_MODE_AUTO
+    }
 }

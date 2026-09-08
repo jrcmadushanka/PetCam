@@ -31,6 +31,7 @@ dependencies {
     implementation(project(":feature:settings"))
     implementation(project(":core:model"))
     implementation(project(":data:camera"))
+    implementation(project(":data:media"))
     implementation(project(":feature:camera"))
     implementation(project(":domain"))
 

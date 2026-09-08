@@ -31,6 +31,8 @@ fun CameraPreviewScreen(
     onRetry: () -> Unit,
     previewContent: @Composable BoxScope.() -> Unit,
     modifier: Modifier = Modifier,
+    canCapturePhoto: Boolean,
+    onRequestCapturePermission: () -> Unit,
 ) {
     when (previewStatus) {
         CameraPreviewStatus.PERMISSION_REQUIRED ->
@@ -52,9 +54,11 @@ fun CameraPreviewScreen(
             CameraSurfaceContent(
                 status = previewStatus,
                 uiState = uiState,
+                canCapturePhoto = canCapturePhoto,
                 onAction = onAction,
+                onRequestCapturePermission = onRequestCapturePermission,
                 previewContent = previewContent,
-                modifier = modifier,
+                modifier = modifier
             )
     }
 }
@@ -66,6 +70,8 @@ private fun CameraSurfaceContent(
     onAction: (CameraAction) -> Unit,
     previewContent: @Composable BoxScope.() -> Unit,
     modifier: Modifier,
+    canCapturePhoto: Boolean,
+    onRequestCapturePermission: () -> Unit,
 ) {
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -79,10 +85,7 @@ private fun CameraSurfaceContent(
             val configuration =
                 uiState.configuration
 
-            if (
-                configuration is
-                        CameraConfigurationState.Ready
-            ) {
+            if (configuration is CameraConfigurationState.Ready) {
                 CameraControlBar(
                     configuration = configuration,
                     onAction = onAction,
@@ -92,19 +95,21 @@ private fun CameraSurfaceContent(
                 )
             }
 
-            if (
-                status ==
-                CameraPreviewStatus.STARTING
-            ) {
+            if (status == CameraPreviewStatus.READY) {
+                CameraShutterControls(
+                    captureState = uiState.photoCapture,
+                    canCapturePhoto = canCapturePhoto,
+                    onAction = onAction,
+                    onRequestCapturePermission = onRequestCapturePermission,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 32.dp)
+                )
+            }
+
+            if (status == CameraPreviewStatus.STARTING) {
                 Column(
-                    modifier = Modifier
-                        .align(Alignment.Center),
-                    horizontalAlignment =
-                        Alignment.CenterHorizontally,
-                    verticalArrangement =
-                        Arrangement.spacedBy(
-                            12.dp,
-                        ),
+                    modifier = Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     CircularProgressIndicator()
 
@@ -113,8 +118,7 @@ private fun CameraSurfaceContent(
                             R.string.camera_starting,
                         ),
                         color = Color.White,
-                        style =
-                            MaterialTheme
+                        style = MaterialTheme
                                 .typography
                                 .bodyMedium,
                     )
@@ -319,6 +323,47 @@ private fun CameraFailedContent(
                     ),
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun CameraShutterControls(
+    captureState: PhotoCaptureState,
+    canCapturePhoto: Boolean,
+    onAction: (CameraAction) -> Unit,
+    onRequestCapturePermission: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        when (captureState) {
+            is PhotoCaptureState.Saved ->
+                Text(stringResource(R.string.camera_photo_saved), color = Color.White)
+
+            is PhotoCaptureState.Failed ->
+                Text(stringResource(R.string.camera_photo_failed), color = MaterialTheme.colorScheme.error)
+
+            else -> Unit
+        }
+
+        Button(
+            enabled = captureState != PhotoCaptureState.Capturing,
+            onClick = {
+                if (canCapturePhoto) onAction(CameraAction.CapturePhoto)
+                else onRequestCapturePermission()
+            }
+        ) {
+            Text(
+                if (captureState == PhotoCaptureState.Capturing) {
+                    stringResource(R.string.camera_capturing)
+                } else {
+                    stringResource(R.string.camera_capture_photo)
+                }
+            )
         }
     }
 }

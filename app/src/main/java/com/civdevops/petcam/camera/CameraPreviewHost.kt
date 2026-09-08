@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.hardware.display.DisplayManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.Surface
@@ -50,9 +51,11 @@ fun CameraPreviewHost(
     val view = LocalView.current
 
     var hasCameraPermission by remember(context) {
-        mutableStateOf(
-            context.hasCameraPermission(),
-        )
+        mutableStateOf(context.hasCameraPermission(),)
+    }
+
+    var canCapturePhoto by remember(context) {
+        mutableStateOf(context.hasPhotoWriteAccess())
     }
 
     var bindFailed by remember {
@@ -71,11 +74,7 @@ fun CameraPreviewHost(
 
     var requestedFlashMode by remember { mutableStateOf(FlashMode.OFF) }
 
-    var currentlyBoundLens by remember {
-        mutableStateOf<CameraLens?>(
-            null,
-        )
-    }
+    var currentlyBoundLens by remember { mutableStateOf<CameraLens?>(null) }
 
     val surfaceRequest by cameraXSession.surfaceRequest.collectAsStateWithLifecycle()
 
@@ -87,6 +86,12 @@ fun CameraPreviewHost(
         hasCameraPermission = granted
     }
 
+    val capturePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        canCapturePhoto = context.hasPhotoWriteAccess()
+    }
+
     DisposableEffect(
         lifecycleOwner,
         context,
@@ -94,6 +99,7 @@ fun CameraPreviewHost(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 hasCameraPermission = context.hasCameraPermission()
+                canCapturePhoto = context.hasPhotoWriteAccess()
             }
         }
 
@@ -316,6 +322,12 @@ fun CameraPreviewHost(
                         },
                 )
             }
+        },
+        canCapturePhoto = canCapturePhoto,
+        onRequestCapturePermission = {
+            if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
+                capturePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            }
         })
 }
 
@@ -323,3 +335,12 @@ private fun Context.hasCameraPermission(): Boolean = ContextCompat.checkSelfPerm
     this,
     Manifest.permission.CAMERA,
 ) == PackageManager.PERMISSION_GRANTED
+
+private fun Context.hasPhotoWriteAccess(): Boolean {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) return true
+
+    return ContextCompat.checkSelfPermission(
+        this,
+        Manifest.permission.WRITE_EXTERNAL_STORAGE
+    ) == PackageManager.PERMISSION_GRANTED
+}
