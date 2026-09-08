@@ -1,7 +1,7 @@
 package com.civdevops.petcam.data.media.di
 
-import com.civdevops.petcam.data.camera.PhotoStorage
 import com.civdevops.petcam.data.media.MediaStorePhotoStorage
+import com.civdevops.petcam.data.media.PhotoStorage
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn

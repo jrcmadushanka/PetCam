@@ -7,8 +7,6 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import com.civdevops.petcam.core.model.MediaId
-import com.civdevops.petcam.data.camera.PhotoStorage
-import com.civdevops.petcam.data.camera.PhotoStorageException
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers

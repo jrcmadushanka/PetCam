@@ -10,6 +10,7 @@ android {
 dependencies {
     implementation(project(":core:model"))
     implementation(project(":domain"))
+    implementation(project(":data:media"))
 
     api(libs.androidx.camera.core)
 

@@ -8,6 +8,8 @@ import com.civdevops.petcam.core.model.camera.CameraLens
 import com.civdevops.petcam.core.model.camera.FlashMode
 import com.civdevops.petcam.core.model.camera.RecordingFailure
 import com.civdevops.petcam.core.model.camera.RecordingState
+import com.civdevops.petcam.data.media.PhotoStorage
+import com.civdevops.petcam.data.media.PhotoStorageException
 import com.civdevops.petcam.domain.camera.CameraOperationFailure
 import com.civdevops.petcam.domain.camera.CameraOperationResult
 import com.civdevops.petcam.domain.camera.PhotoCaptureFailure

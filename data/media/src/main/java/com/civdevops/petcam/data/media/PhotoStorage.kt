@@ -1,4 +1,4 @@
-package com.civdevops.petcam.data.camera
+package com.civdevops.petcam.data.media
 
 import com.civdevops.petcam.core.model.MediaId
 import java.io.OutputStream

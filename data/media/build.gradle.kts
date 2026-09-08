@@ -9,7 +9,6 @@ android {
 
 dependencies {
     implementation(project(":core:model"))
-    implementation(project(":data:camera"))
     implementation(libs.kotlinx.coroutines.core)
 
     androidTestImplementation(libs.androidx.test.core)
