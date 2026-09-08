@@ -11,4 +11,9 @@ dependencies {
     implementation(project(":core:model"))
     implementation(project(":data:camera"))
     implementation(libs.kotlinx.coroutines.core)
+
+    androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.kotlinx.coroutines.test)
+    androidTestImplementation(libs.androidx.test.runner)
 }
