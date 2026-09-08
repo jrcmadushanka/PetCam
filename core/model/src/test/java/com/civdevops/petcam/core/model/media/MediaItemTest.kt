@@ -52,7 +52,7 @@ class MediaItemTest {
     @Test
     fun `video rejects negative creation time`() {
         assertFailsWith<IllegalArgumentException> {
-            MediaItem .Video(
+            MediaItem.Video(
                 id = MediaId("video-1"),
                 createdAtEpochMillis = -1L,
                 durationMillis = 5_000L,
