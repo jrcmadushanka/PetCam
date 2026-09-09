@@ -17,19 +17,19 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
-    implementation(libs.androidx.hilt.lifecycle.viewmodel.compose,)
-    implementation(libs.androidx.compose.material3.adaptive,)
+    implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.compose.material3.adaptive)
 
     testImplementation(project(":core:testing"))
     testImplementation(kotlin("test"))
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.junit)
 
-    androidTestImplementation(libs.androidx.compose.ui.test.junit4,)
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 
-    debugImplementation(libs.androidx.compose.ui.test.manifest,)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

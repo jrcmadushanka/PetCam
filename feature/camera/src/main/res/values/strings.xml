@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="camera_permission_title">
+        Camera access required
+    </string>
+
+    <string name="camera_permission_message">
+        Pet Cam needs camera access to show the viewfinder and capture your pet.
+    </string>
+
+    <string name="camera_permission_allow">
+        Allow camera
+    </string>
+
+    <string name="camera_starting">
+        Starting camera…
+    </string>
+
+    <string name="camera_unavailable_title">
+        Camera unavailable
+    </string>
+
+    <string name="camera_unavailable_message">
+        Pet Cam couldn\'t start the camera.
+    </string>
+
+    <string name="camera_retry">
+        Retry
+    </string>
+
+    <string name="camera_lens_back">
+        Back
+    </string>
+
+    <string name="camera_lens_front">
+        Front
+    </string>
+
+    <string name="camera_switch_lens">
+        Switch camera
+    </string>
+
+    <string name="camera_flash_off">
+        Flash: Off
+    </string>
+
+    <string name="camera_flash_on">
+        Flash: On
+    </string>
+
+    <string name="camera_flash_auto">
+        Flash: Auto
+    </string>
+
+    <string name="camera_flash_unavailable">
+        No flash
+    </string>
+
+    <string name="camera_capture_photo">Capture photo</string>
+    <string name="camera_capturing">Saving…</string>
+    <string name="camera_photo_saved">Photo saved</string>
+    <string name="camera_photo_failed">Couldn\'t save photo</string>
+    <string name="camera_mode_photo">Photo</string>
+    <string name="camera_mode_video">Video</string>
+    <string name="camera_start_recording">Record</string>
+    <string name="camera_pause_recording">Pause</string>
+    <string name="camera_resume_recording">Resume</string>
+    <string name="camera_stop_recording">Stop</string>
+    <string name="camera_recording_starting">Starting…</string>
+    <string name="camera_recording_saving">Saving…</string>
+    <string name="camera_video_saved">Video saved</string>
+    <string name="camera_video_failed">Video recording failed</string>
+    <string name="camera_recording_action_failed">Couldn\'t perform recording action</string>
+    <string name="camera_video_unavailable">Video unavailable</string>
+    <string name="camera_settings">Settings</string>
+</resources>

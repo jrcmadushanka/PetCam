@@ -6,13 +6,13 @@ import com.civdevops.petcam.core.model.camera.CaptureMode
 import com.civdevops.petcam.core.model.camera.FlashMode
 import com.civdevops.petcam.core.model.camera.VideoQuality
 import com.civdevops.petcam.core.model.settings.CameraSettings
-import java.io.File
-import kotlin.io.path.createTempDirectory
-import kotlin.test.assertEquals
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
+import java.io.File
+import kotlin.io.path.createTempDirectory
+import kotlin.test.assertEquals
 
 class DefaultSettingsRepositoryTest {
 

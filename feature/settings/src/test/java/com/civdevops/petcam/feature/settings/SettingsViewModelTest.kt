@@ -12,6 +12,7 @@ import com.civdevops.petcam.core.model.settings.CameraSettings
 import com.civdevops.petcam.core.model.settings.ExperienceSettings
 import com.civdevops.petcam.core.model.settings.PetSoundVolumeMode
 import com.civdevops.petcam.core.model.settings.SharingSettings
+import com.civdevops.petcam.core.testing.MainDispatcherRule
 import com.civdevops.petcam.domain.repository.SettingsRepository
 import com.civdevops.petcam.domain.usecase.settings.ObserveSettingsUseCase
 import com.civdevops.petcam.domain.usecase.settings.UpdateAudioSettingsUseCase
@@ -24,12 +25,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.junit.Rule
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import com.civdevops.petcam.core.testing.MainDispatcherRule
-import org.junit.Rule
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest {

@@ -14,19 +14,19 @@ import com.civdevops.petcam.domain.usecase.settings.UpdateCameraSettingsUseCase
 import com.civdevops.petcam.domain.usecase.settings.UpdateExperienceSettingsUseCase
 import com.civdevops.petcam.domain.usecase.settings.UpdateSharingSettingsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
-import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import javax.inject.Inject
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(

@@ -10,12 +10,12 @@ import com.civdevops.petcam.core.model.settings.CameraSettings
 import com.civdevops.petcam.core.model.settings.ExperienceSettings
 import com.civdevops.petcam.core.model.settings.SharingSettings
 import com.civdevops.petcam.domain.repository.SettingsRepository
-import java.io.IOException
-import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import java.io.IOException
+import javax.inject.Inject
 
 class DefaultSettingsRepository @Inject constructor(
     private val dataStore: DataStore<Preferences>,

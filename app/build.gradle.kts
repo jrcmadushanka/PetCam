@@ -29,7 +29,15 @@ dependencies {
     implementation(project(":core:designsystem"))
     implementation(project(":data:settings"))
     implementation(project(":feature:settings"))
+    implementation(project(":core:model"))
+    implementation(project(":data:camera"))
+    implementation(project(":data:media"))
+    implementation(project(":feature:camera"))
+    implementation(project(":domain"))
 
+    implementation(libs.androidx.camera.viewfinder.compose)
+    implementation(libs.androidx.camera.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
@@ -41,10 +49,7 @@ dependencies {
     implementation(libs.androidx.core.splashscreen)
 
     testImplementation(libs.junit)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
-    debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
