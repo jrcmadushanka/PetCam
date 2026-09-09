@@ -71,9 +71,7 @@ class RecordingStateTransitionPolicyTest {
 
             RecordingState.Failed(
                 failure = RecordingFailure.START_FAILED,
-            ) to RecordingState.Recording(
-                elapsedMillis = 0L,
-            ),
+            ) to RecordingState.Preparing,
         )
 
         transitions.forEach { (from, to) ->

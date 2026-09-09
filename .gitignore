@@ -16,3 +16,5 @@ local.properties
 /.tools/
 /scripts/exports/
 /.docs/
+/.idea/androidTestResultsUserPreferences.xml
+/.idea/deploymentTargetSelector.xml

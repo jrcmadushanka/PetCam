@@ -36,4 +36,6 @@ interface CameraRepository {
     suspend fun resumeVideoRecording(): RecordingCommandResult
 
     suspend fun stopVideoRecording(): VideoRecordingResult
+
+    suspend fun setTorchEnabled(enabled: Boolean): CameraOperationResult
 }

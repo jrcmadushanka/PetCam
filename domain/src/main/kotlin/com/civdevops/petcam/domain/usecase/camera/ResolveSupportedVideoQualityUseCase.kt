@@ -1,8 +1,9 @@
 package com.civdevops.petcam.domain.usecase.camera
 
 import com.civdevops.petcam.core.model.camera.VideoQuality
+import javax.inject.Inject
 
-class ResolveSupportedVideoQualityUseCase {
+class ResolveSupportedVideoQualityUseCase @Inject constructor(){
 
     operator fun invoke(
         preferredQuality: VideoQuality,

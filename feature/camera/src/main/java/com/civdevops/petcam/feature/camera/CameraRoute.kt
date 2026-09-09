@@ -9,14 +9,18 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.civdevops.petcam.core.model.camera.CameraCapabilities
 import com.civdevops.petcam.core.model.camera.CameraLens
 import com.civdevops.petcam.core.model.camera.FlashMode
+import kotlinx.coroutines.flow.collectLatest
 
 @Composable
 fun CameraRoute(
+    onOpenSettings: () -> Unit,
     previewStatus: CameraPreviewStatus,
     capabilities: CameraCapabilities?,
     canCapturePhoto: Boolean,
+    microphonePermissionGranted: Boolean,
     onRequestCameraPermission: () -> Unit,
     onRequestCapturePermission: () -> Unit,
+    onRequestMicrophonePermission: (onResult: (Boolean) -> Unit) -> Unit,
     onRetry: () -> Unit,
     onConfigurationChanged: (CameraLens, FlashMode) -> Unit,
     previewContent: @Composable BoxScope.() -> Unit,
@@ -25,14 +29,28 @@ fun CameraRoute(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(capabilities) {
-        viewModel.onCapabilitiesChanged(capabilities,)
+        viewModel.onCapabilitiesChanged(capabilities)
+    }
+
+    LaunchedEffect(microphonePermissionGranted) {
+        viewModel.onMicrophonePermissionChanged(microphonePermissionGranted)
+    }
+
+    LaunchedEffect(viewModel) {
+        viewModel.effects.collectLatest { effect ->
+            when (effect) {
+                CameraEffect.RequestMicrophonePermission -> {
+                    onRequestMicrophonePermission(viewModel::onMicrophonePermissionChanged)
+                }
+            }
+        }
     }
 
     val configuration = uiState.configuration
 
     LaunchedEffect(configuration) {
         if (configuration is CameraConfigurationState.Ready) {
-            onConfigurationChanged(configuration.lens, configuration.flashMode,)
+            onConfigurationChanged(configuration.lens, configuration.flashMode)
         }
     }
 
@@ -45,5 +63,6 @@ fun CameraRoute(
         onRequestCapturePermission = onRequestCapturePermission,
         onRetry = onRetry,
         previewContent = previewContent,
+        onOpenSettings = onOpenSettings
     )
 }

@@ -8,7 +8,10 @@ import com.civdevops.petcam.core.designsystem.theme.PetCamTheme
 import com.civdevops.petcam.core.model.camera.CameraCapabilities
 import com.civdevops.petcam.core.model.camera.CameraLens
 import com.civdevops.petcam.core.model.camera.CameraLensCapabilities
+import com.civdevops.petcam.core.model.camera.CaptureMode
 import com.civdevops.petcam.core.model.camera.FlashMode
+import com.civdevops.petcam.core.model.camera.RecordingState
+import com.civdevops.petcam.core.model.camera.VideoQuality
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -31,7 +34,8 @@ class CameraPreviewScreenTest {
                     onRequestCameraPermission = {},
                     onRequestCapturePermission = {},
                     onRetry = {},
-                    previewContent = {}
+                    previewContent = {},
+                    onOpenSettings = {}
                 )
             }
         }
@@ -53,7 +57,8 @@ class CameraPreviewScreenTest {
                     onRequestCameraPermission = {},
                     onRequestCapturePermission = {},
                     onRetry = {},
-                    previewContent = {}
+                    previewContent = {},
+                    onOpenSettings = {}
                 )
             }
         }
@@ -78,7 +83,8 @@ class CameraPreviewScreenTest {
                     onRequestCameraPermission = {},
                     onRequestCapturePermission = { permissionRequested = true },
                     onRetry = {},
-                    previewContent = {}
+                    previewContent = {},
+                    onOpenSettings = {}
                 )
             }
         }
@@ -101,12 +107,105 @@ class CameraPreviewScreenTest {
                     onRequestCameraPermission = {},
                     onRequestCapturePermission = {},
                     onRetry = {},
-                    previewContent = {}
+                    previewContent = {},
+                    onOpenSettings = {}
                 )
             }
         }
 
         composeRule.onNodeWithText("No flash").assertIsDisplayed()
+    }
+
+    @Test
+    fun videoModeShowsRecordButton() {
+        composeRule.setContent {
+            PetCamTheme {
+                CameraPreviewScreen(
+                    previewStatus = CameraPreviewStatus.READY,
+                    uiState = readyVideoState(),
+                    canCapturePhoto = true,
+                    onAction = {},
+                    onRequestCameraPermission = {},
+                    onRequestCapturePermission = {},
+                    onRetry = {},
+                    onOpenSettings = {},
+                    previewContent = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Record").assertIsDisplayed()
+    }
+
+    @Test
+    fun recordingShowsPauseAndStopControls() {
+        composeRule.setContent {
+            PetCamTheme {
+                CameraPreviewScreen(
+                    previewStatus = CameraPreviewStatus.READY,
+                    uiState = readyVideoState(RecordingState.Recording(5_000)),
+                    canCapturePhoto = true,
+                    onAction = {},
+                    onRequestCameraPermission = {},
+                    onRequestCapturePermission = {},
+                    onRetry = {},
+                    onOpenSettings = {},
+                    previewContent = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("00:05").assertIsDisplayed()
+        composeRule.onNodeWithText("Pause").assertIsDisplayed()
+        composeRule.onNodeWithText("Stop").assertIsDisplayed()
+    }
+
+    @Test
+    fun pausedRecordingShowsResumeAndStopControls() {
+        composeRule.setContent {
+            PetCamTheme {
+                CameraPreviewScreen(
+                    previewStatus = CameraPreviewStatus.READY,
+                    uiState = readyVideoState(RecordingState.Paused(12_000)),
+                    canCapturePhoto = true,
+                    onAction = {},
+                    onRequestCameraPermission = {},
+                    onRequestCapturePermission = {},
+                    onRetry = {},
+                    onOpenSettings = {},
+                    previewContent = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("00:12").assertIsDisplayed()
+        composeRule.onNodeWithText("Resume").assertIsDisplayed()
+        composeRule.onNodeWithText("Stop").assertIsDisplayed()
+    }
+
+    private fun readyVideoState(
+        recordingState: RecordingState = RecordingState.Idle
+    ): CameraUiState {
+        val capabilities = CameraCapabilities(
+            mapOf(
+                CameraLens.FRONT to CameraLensCapabilities(
+                    flashSupported = false,
+                    supportedVideoQualities = setOf(VideoQuality.FHD)
+                )
+            )
+        )
+
+        return CameraUiState(
+            configuration = CameraConfigurationState.Ready(
+                capabilities = capabilities,
+                lens = CameraLens.FRONT,
+                flashMode = FlashMode.OFF,
+                videoQuality = VideoQuality.FHD
+            ),
+            captureMode = CaptureMode.VIDEO,
+            recordAudio = true,
+            recordingState = recordingState
+        )
     }
 
     private fun readyState(): CameraUiState {

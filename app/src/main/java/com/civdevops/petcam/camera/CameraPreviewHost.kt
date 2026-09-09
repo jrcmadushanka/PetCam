@@ -42,6 +42,7 @@ import com.civdevops.petcam.feature.camera.CameraRoute
 @Composable
 fun CameraPreviewHost(
     cameraXSession: CameraXSession,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -50,8 +51,16 @@ fun CameraPreviewHost(
 
     val view = LocalView.current
 
+    var microphonePermissionResultHandler by remember {
+        mutableStateOf<((Boolean) -> Unit)?>(null)
+    }
+
     var hasCameraPermission by remember(context) {
         mutableStateOf(context.hasCameraPermission(),)
+    }
+
+    var hasMicrophonePermission by remember(context) {
+        mutableStateOf(context.hasMicrophonePermission())
     }
 
     var canCapturePhoto by remember(context) {
@@ -92,6 +101,14 @@ fun CameraPreviewHost(
         canCapturePhoto = context.hasPhotoWriteAccess()
     }
 
+    val microphonePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasMicrophonePermission = granted
+        microphonePermissionResultHandler?.invoke(granted)
+        microphonePermissionResultHandler = null
+    }
+
     DisposableEffect(
         lifecycleOwner,
         context,
@@ -100,6 +117,7 @@ fun CameraPreviewHost(
             if (event == Lifecycle.Event.ON_RESUME) {
                 hasCameraPermission = context.hasCameraPermission()
                 canCapturePhoto = context.hasPhotoWriteAccess()
+                hasMicrophonePermission = context.hasMicrophonePermission()
             }
         }
 
@@ -270,6 +288,7 @@ fun CameraPreviewHost(
     }
 
     CameraRoute(
+        onOpenSettings = onOpenSettings,
         previewStatus = previewStatus,
         capabilities = capabilities,
         onRequestCameraPermission = {
@@ -328,7 +347,13 @@ fun CameraPreviewHost(
             if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
                 capturePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
             }
-        })
+        },
+        onRequestMicrophonePermission = { onResult ->
+            microphonePermissionResultHandler = onResult
+            microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        },
+        microphonePermissionGranted = hasMicrophonePermission
+    )
 }
 
 private fun Context.hasCameraPermission(): Boolean = ContextCompat.checkSelfPermission(
@@ -342,5 +367,12 @@ private fun Context.hasPhotoWriteAccess(): Boolean {
     return ContextCompat.checkSelfPermission(
         this,
         Manifest.permission.WRITE_EXTERNAL_STORAGE
+    ) == PackageManager.PERMISSION_GRANTED
+}
+
+private fun Context.hasMicrophonePermission(): Boolean {
+    return ContextCompat.checkSelfPermission(
+        this,
+        Manifest.permission.RECORD_AUDIO
     ) == PackageManager.PERMISSION_GRANTED
 }
