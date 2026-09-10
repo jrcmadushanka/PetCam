@@ -1,5 +1,7 @@
 package com.civdevops.petcam.feature.camera
 
+import com.civdevops.petcam.core.model.PetSoundId
+import com.civdevops.petcam.core.model.audio.PetSoundCategory
 import com.civdevops.petcam.core.model.camera.CaptureMode
 
 sealed interface CameraAction {
@@ -12,4 +14,8 @@ sealed interface CameraAction {
     data object ResumeVideoRecording : CameraAction
     data object StopVideoRecording : CameraAction
     data object ToggleVideoTorch : CameraAction
+    data class SelectAttentionCategory(val category: PetSoundCategory) : CameraAction
+    data class SelectAttentionSound(val soundId: PetSoundId) : CameraAction
+    data object PlayAttentionSound : CameraAction
+    data object CameraInactive : CameraAction
 }

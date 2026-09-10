@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
@@ -21,6 +23,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.keepScreenOn
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.civdevops.petcam.core.model.audio.PetSoundCategories
+import com.civdevops.petcam.core.model.audio.PetSoundCategory
 import com.civdevops.petcam.core.model.camera.CameraLens
 import com.civdevops.petcam.core.model.camera.CaptureMode
 import com.civdevops.petcam.core.model.camera.FlashMode
@@ -161,6 +165,12 @@ private fun CameraCaptureControls(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        AttentionSoundControls(
+            state = uiState.attentionSound,
+            enabled = !uiState.recordingInProgress,
+            onAction = onAction
+        )
+
         CameraModeSelector(
             selectedMode = uiState.captureMode,
             enabled = !uiState.recordingInProgress,
@@ -177,6 +187,86 @@ private fun CameraCaptureControls(
 
             CaptureMode.VIDEO -> CameraVideoControls(uiState, onAction)
         }
+    }
+}
+
+@Composable
+private fun AttentionSoundControls(
+    state: AttentionSoundUiState,
+    enabled: Boolean,
+    onAction: (CameraAction) -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(
+            text = stringResource(R.string.camera_attention_sound),
+            color = Color.White,
+            style = MaterialTheme.typography.labelLarge
+        )
+
+        if (state.categories.isEmpty()) {
+            Text(
+                text = stringResource(R.string.camera_attention_unavailable),
+                color = Color.White
+            )
+            return
+        }
+
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            items(state.categories, key = { it.rawValue }) { category ->
+                FilterChip(
+                    selected = state.selectedCategory == category,
+                    enabled = enabled,
+                    onClick = {
+                        onAction(CameraAction.SelectAttentionCategory(category))
+                    },
+                    label = {
+                        Text(attentionCategoryLabel(category))
+                    }
+                )
+            }
+        }
+
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            items(state.sounds, key = { it.id.rawValue }) { sound ->
+                FilterChip(
+                    selected = state.selectedSoundId == sound.id,
+                    enabled = enabled,
+                    onClick = {
+                        onAction(CameraAction.SelectAttentionSound(sound.id))
+                    },
+                    label = { Text(sound.name) }
+                )
+            }
+        }
+
+        Button(
+            enabled = enabled && state.canPlay,
+            onClick = { onAction(CameraAction.PlayAttentionSound) }
+        ) {
+            Text(stringResource(R.string.camera_attention_play))
+        }
+
+        if (state.failure != null) {
+            Text(
+                text = stringResource(R.string.camera_attention_failed),
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+    }
+}
+
+@Composable
+private fun attentionCategoryLabel(category: PetSoundCategory): String {
+    return when (category) {
+        PetSoundCategories.Dogs -> stringResource(R.string.camera_attention_dogs)
+        PetSoundCategories.Cats -> stringResource(R.string.camera_attention_cats)
+        PetSoundCategories.Whistles -> stringResource(R.string.camera_attention_whistles)
+        PetSoundCategories.Toys -> stringResource(R.string.camera_attention_toys)
+        PetSoundCategories.Other -> stringResource(R.string.camera_attention_other)
+        else -> category.rawValue
     }
 }
 

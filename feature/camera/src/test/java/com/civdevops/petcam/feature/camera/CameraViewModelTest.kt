@@ -1,7 +1,12 @@
 package com.civdevops.petcam.feature.camera
 
 import com.civdevops.petcam.core.model.MediaId
-import com.civdevops.petcam.core.model.audio.PetSoundCategory
+import com.civdevops.petcam.core.model.PetSoundId
+import com.civdevops.petcam.core.model.SoundPackId
+import com.civdevops.petcam.core.model.audio.PetSound
+import com.civdevops.petcam.core.model.audio.PetSoundCategories
+import com.civdevops.petcam.core.model.audio.PetSoundGain
+import com.civdevops.petcam.core.model.audio.PetSoundSource
 import com.civdevops.petcam.core.model.camera.CameraCapabilities
 import com.civdevops.petcam.core.model.camera.CameraLens
 import com.civdevops.petcam.core.model.camera.CameraLensCapabilities
@@ -16,6 +21,8 @@ import com.civdevops.petcam.core.model.settings.ExperienceSettings
 import com.civdevops.petcam.core.model.settings.PetSoundVolumeMode
 import com.civdevops.petcam.core.model.settings.SharingSettings
 import com.civdevops.petcam.core.testing.MainDispatcherRule
+import com.civdevops.petcam.domain.audio.AttentionSoundPlaybackResult
+import com.civdevops.petcam.domain.audio.AttentionSoundPlayer
 import com.civdevops.petcam.domain.camera.CameraOperationResult
 import com.civdevops.petcam.domain.camera.PhotoCaptureFailure
 import com.civdevops.petcam.domain.camera.PhotoCaptureResult
@@ -23,7 +30,12 @@ import com.civdevops.petcam.domain.camera.RecordingCommandResult
 import com.civdevops.petcam.domain.camera.VideoRecordingRequest
 import com.civdevops.petcam.domain.camera.VideoRecordingResult
 import com.civdevops.petcam.domain.repository.CameraRepository
+import com.civdevops.petcam.domain.repository.PetSoundRepository
 import com.civdevops.petcam.domain.repository.SettingsRepository
+import com.civdevops.petcam.domain.usecase.audio.ObservePlayablePetSoundsUseCase
+import com.civdevops.petcam.domain.usecase.audio.PlayAttentionSoundUseCase
+import com.civdevops.petcam.domain.usecase.audio.ResolveEffectiveSoundGainUseCase
+import com.civdevops.petcam.domain.usecase.audio.StopAttentionSoundUseCase
 import com.civdevops.petcam.domain.usecase.camera.CapturePhotoUseCase
 import com.civdevops.petcam.domain.usecase.camera.ObserveRecordingStateUseCase
 import com.civdevops.petcam.domain.usecase.camera.PauseVideoRecordingUseCase
@@ -268,11 +280,37 @@ class CameraViewModelTest {
         assertTrue(viewModel.uiState.value.videoTorchEnabled)
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `default audio category selects playable sound`() = runTest {
+        val viewModel = createViewModel(
+            cameraRepository = FakeCameraRepository(),
+            settings = sampleSettings()
+        )
+
+        backgroundScope.launch { viewModel.uiState.collect() }
+        viewModel.onCapabilitiesChanged(testCapabilities())
+        advanceUntilIdle()
+
+        assertEquals(
+            PetSoundCategories.Dogs,
+            viewModel.uiState.value.attentionSound.selectedCategory
+        )
+
+        assertEquals(
+            PetSoundId("dog_01"),
+            viewModel.uiState.value.attentionSound.selectedSoundId
+        )
+    }
+
     private fun createViewModel(
         cameraRepository: CameraRepository,
         settings: AppSettings = sampleSettings()
     ): CameraViewModel {
         val settingsRepository = FakeSettingsRepository(settings)
+        val soundRepository = FakePetSoundRepository(testSounds())
+        val attentionPlayer = FakeAttentionSoundPlayer()
+        val gainUseCase = ResolveEffectiveSoundGainUseCase()
 
         return CameraViewModel(
             observeSettingsUseCase = ObserveSettingsUseCase(settingsRepository),
@@ -285,8 +323,42 @@ class CameraViewModelTest {
             pauseVideoRecordingUseCase = PauseVideoRecordingUseCase(cameraRepository),
             resumeVideoRecordingUseCase = ResumeVideoRecordingUseCase(cameraRepository),
             stopVideoRecordingUseCase = StopVideoRecordingUseCase(cameraRepository),
-            setTorchEnabledUseCase = SetTorchEnabledUseCase(cameraRepository)
+            setTorchEnabledUseCase = SetTorchEnabledUseCase(cameraRepository),
+            observePlayablePetSoundsUseCase = ObservePlayablePetSoundsUseCase(soundRepository),
+            playAttentionSoundUseCase = PlayAttentionSoundUseCase(attentionPlayer, gainUseCase),
+            stopAttentionSoundUseCase = StopAttentionSoundUseCase(attentionPlayer),
         )
+    }
+
+    private class FakePetSoundRepository(private val sounds: List<PetSound>) : PetSoundRepository {
+
+        override fun observePetSounds(): Flow<List<PetSound>> = flowOf(sounds)
+
+        override suspend fun getPetSound(id: PetSoundId): PetSound? {
+            return sounds.firstOrNull { it.id == id }
+        }
+    }
+
+    private class FakeAttentionSoundPlayer : AttentionSoundPlayer {
+        var lastSoundId: PetSoundId? = null
+        var lastLoop = false
+        var playCount = 0
+        var stopCount = 0
+
+        override suspend fun play(
+            soundId: PetSoundId,
+            gain: PetSoundGain,
+            loop: Boolean
+        ): AttentionSoundPlaybackResult {
+            lastSoundId = soundId
+            lastLoop = loop
+            playCount++
+            return AttentionSoundPlaybackResult.Started
+        }
+
+        override suspend fun stop() {
+            stopCount++
+        }
     }
 
     private class FakeCameraRepository(
@@ -365,6 +437,27 @@ class CameraViewModelTest {
 
     private companion object {
 
+        fun testSounds(): List<PetSound> {
+            val packId = SoundPackId("starter")
+
+            return listOf(
+                PetSound(
+                    id = PetSoundId("dog_01"),
+                    packId = packId,
+                    category = PetSoundCategories.Dogs,
+                    name = "Dog",
+                    source = PetSoundSource.Bundled
+                ),
+                PetSound(
+                    id = PetSoundId("cat_01"),
+                    packId = packId,
+                    category = PetSoundCategories.Cats,
+                    name = "Cat",
+                    source = PetSoundSource.Bundled
+                )
+            )
+        }
+
         fun testCapabilities() = CameraCapabilities(
             mapOf(
                 CameraLens.BACK to CameraLensCapabilities(
@@ -391,7 +484,7 @@ class CameraViewModelTest {
                 recordAudio = recordAudio
             ),
             audio = AudioSettings(
-                defaultCategory = PetSoundCategory("dogs"),
+                defaultCategory = PetSoundCategories.Dogs,
                 volumeMode = PetSoundVolumeMode.FollowDevice,
                 customVolumePercent = 75,
                 loopDuringRecording = false,
