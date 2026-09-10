@@ -34,6 +34,7 @@ dependencies {
     implementation(project(":data:media"))
     implementation(project(":feature:camera"))
     implementation(project(":domain"))
+    implementation(project(":data:audio"))
 
     implementation(libs.androidx.camera.viewfinder.compose)
     implementation(libs.androidx.camera.compose)

@@ -1,5 +1,6 @@
 package com.civdevops.petcam
 
+import android.media.AudioManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -30,5 +31,10 @@ class MainActivity : ComponentActivity() {
                 PetCamRoot(cameraXSession)
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        volumeControlStream = AudioManager.STREAM_MUSIC
     }
 }

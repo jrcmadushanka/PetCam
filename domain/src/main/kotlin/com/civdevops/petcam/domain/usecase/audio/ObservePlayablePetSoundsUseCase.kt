@@ -6,9 +6,10 @@ import com.civdevops.petcam.domain.repository.PetSoundRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import javax.inject.Inject
 
-class ObservePlayablePetSoundsUseCase(
-    private val petSoundRepository: PetSoundRepository,
+class ObservePlayablePetSoundsUseCase @Inject constructor(
+    private val petSoundRepository: PetSoundRepository
 ) {
 
     operator fun invoke(): Flow<List<PetSound>> =

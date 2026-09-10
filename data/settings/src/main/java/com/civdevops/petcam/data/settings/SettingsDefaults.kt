@@ -1,6 +1,6 @@
 package com.civdevops.petcam.data.settings
 
-import com.civdevops.petcam.core.model.audio.PetSoundCategory
+import com.civdevops.petcam.core.model.audio.PetSoundCategories
 import com.civdevops.petcam.core.model.camera.CameraLens
 import com.civdevops.petcam.core.model.camera.CaptureMode
 import com.civdevops.petcam.core.model.camera.FlashMode
@@ -23,7 +23,7 @@ internal object SettingsDefaults {
     )
 
     val audio = AudioSettings(
-        defaultCategory = PetSoundCategory("dogs"),
+        defaultCategory = PetSoundCategories.Dogs,
         volumeMode = PetSoundVolumeMode.FollowDevice,
         customVolumePercent = 75,
         loopDuringRecording = false,
