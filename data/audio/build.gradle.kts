@@ -1,6 +1,7 @@
 plugins {
     id("petcam.android.library")
     id("petcam.hilt")
+    id("petcam.audio.catalog")
 }
 
 android {
@@ -15,6 +16,8 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(kotlin("test"))
     testImplementation(libs.kotlinx.coroutines.test)
+
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }

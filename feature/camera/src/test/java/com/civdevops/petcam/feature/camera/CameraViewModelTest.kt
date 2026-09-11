@@ -22,6 +22,7 @@ import com.civdevops.petcam.core.model.settings.PetSoundVolumeMode
 import com.civdevops.petcam.core.model.settings.SharingSettings
 import com.civdevops.petcam.core.testing.MainDispatcherRule
 import com.civdevops.petcam.domain.audio.AttentionSoundPlaybackResult
+import com.civdevops.petcam.domain.audio.AttentionSoundPlaybackState
 import com.civdevops.petcam.domain.audio.AttentionSoundPlayer
 import com.civdevops.petcam.domain.camera.CameraOperationResult
 import com.civdevops.petcam.domain.camera.PhotoCaptureFailure
@@ -32,9 +33,12 @@ import com.civdevops.petcam.domain.camera.VideoRecordingResult
 import com.civdevops.petcam.domain.repository.CameraRepository
 import com.civdevops.petcam.domain.repository.PetSoundRepository
 import com.civdevops.petcam.domain.repository.SettingsRepository
+import com.civdevops.petcam.domain.usecase.audio.ObserveAttentionSoundPlaybackStateUseCase
 import com.civdevops.petcam.domain.usecase.audio.ObservePlayablePetSoundsUseCase
+import com.civdevops.petcam.domain.usecase.audio.PauseAttentionSoundUseCase
 import com.civdevops.petcam.domain.usecase.audio.PlayAttentionSoundUseCase
 import com.civdevops.petcam.domain.usecase.audio.ResolveEffectiveSoundGainUseCase
+import com.civdevops.petcam.domain.usecase.audio.ResumeAttentionSoundUseCase
 import com.civdevops.petcam.domain.usecase.audio.StopAttentionSoundUseCase
 import com.civdevops.petcam.domain.usecase.camera.CapturePhotoUseCase
 import com.civdevops.petcam.domain.usecase.camera.ObserveRecordingStateUseCase
@@ -138,8 +142,7 @@ class CameraViewModelTest {
     fun `video without audio starts without microphone permission`() = runTest {
         val repository = FakeCameraRepository()
         val viewModel = createViewModel(
-            repository,
-            sampleSettings(defaultMode = CaptureMode.VIDEO, recordAudio = false)
+            repository, sampleSettings(defaultMode = CaptureMode.VIDEO, recordAudio = false)
         )
 
         backgroundScope.launch { viewModel.uiState.collect() }
@@ -159,8 +162,7 @@ class CameraViewModelTest {
     fun `video with audio requests microphone permission before recording`() = runTest {
         val repository = FakeCameraRepository()
         val viewModel = createViewModel(
-            repository,
-            sampleSettings(defaultMode = CaptureMode.VIDEO, recordAudio = true)
+            repository, sampleSettings(defaultMode = CaptureMode.VIDEO, recordAudio = true)
         )
 
         backgroundScope.launch { viewModel.uiState.collect() }
@@ -188,8 +190,7 @@ class CameraViewModelTest {
     fun `mode and lens cannot change while recording`() = runTest {
         val repository = FakeCameraRepository()
         val viewModel = createViewModel(
-            repository,
-            sampleSettings(defaultMode = CaptureMode.VIDEO, recordAudio = false)
+            repository, sampleSettings(defaultMode = CaptureMode.VIDEO, recordAudio = false)
         )
 
         backgroundScope.launch { viewModel.uiState.collect() }
@@ -220,8 +221,7 @@ class CameraViewModelTest {
     fun `pause resume and stop recording follow valid lifecycle`() = runTest {
         val repository = FakeCameraRepository()
         val viewModel = createViewModel(
-            repository,
-            sampleSettings(defaultMode = CaptureMode.VIDEO, recordAudio = false)
+            repository, sampleSettings(defaultMode = CaptureMode.VIDEO, recordAudio = false)
         )
 
         backgroundScope.launch { viewModel.uiState.collect() }
@@ -257,11 +257,8 @@ class CameraViewModelTest {
     fun `video flash toggles torch`() = runTest {
         val repository = FakeCameraRepository()
         val viewModel = createViewModel(
-            repository,
-            sampleSettings(
-                defaultMode = CaptureMode.VIDEO,
-                recordAudio = false,
-                defaultLens = CameraLens.BACK
+            repository, sampleSettings(
+                defaultMode = CaptureMode.VIDEO, recordAudio = false, defaultLens = CameraLens.BACK
             )
         )
 
@@ -284,8 +281,7 @@ class CameraViewModelTest {
     @Test
     fun `default audio category selects playable sound`() = runTest {
         val viewModel = createViewModel(
-            cameraRepository = FakeCameraRepository(),
-            settings = sampleSettings()
+            cameraRepository = FakeCameraRepository(), settings = sampleSettings()
         )
 
         backgroundScope.launch { viewModel.uiState.collect() }
@@ -293,19 +289,16 @@ class CameraViewModelTest {
         advanceUntilIdle()
 
         assertEquals(
-            PetSoundCategories.Dogs,
-            viewModel.uiState.value.attentionSound.selectedCategory
+            PetSoundCategories.Dogs, viewModel.uiState.value.attentionSound.selectedCategory
         )
 
         assertEquals(
-            PetSoundId("dog_01"),
-            viewModel.uiState.value.attentionSound.selectedSoundId
+            PetSoundId("starter:dog_01"), viewModel.uiState.value.attentionSound.selectedSoundId
         )
     }
 
     private fun createViewModel(
-        cameraRepository: CameraRepository,
-        settings: AppSettings = sampleSettings()
+        cameraRepository: CameraRepository, settings: AppSettings = sampleSettings()
     ): CameraViewModel {
         val settingsRepository = FakeSettingsRepository(settings)
         val soundRepository = FakePetSoundRepository(testSounds())
@@ -327,6 +320,9 @@ class CameraViewModelTest {
             observePlayablePetSoundsUseCase = ObservePlayablePetSoundsUseCase(soundRepository),
             playAttentionSoundUseCase = PlayAttentionSoundUseCase(attentionPlayer, gainUseCase),
             stopAttentionSoundUseCase = StopAttentionSoundUseCase(attentionPlayer),
+            observeAttentionSoundPlaybackStateUseCase = ObserveAttentionSoundPlaybackStateUseCase(attentionPlayer),
+            pauseAttentionSoundUseCase = PauseAttentionSoundUseCase(attentionPlayer),
+            resumeAttentionSoundUseCase = ResumeAttentionSoundUseCase(attentionPlayer),
         )
     }
 
@@ -340,24 +336,46 @@ class CameraViewModelTest {
     }
 
     private class FakeAttentionSoundPlayer : AttentionSoundPlayer {
+
+        val state = MutableStateFlow<AttentionSoundPlaybackState>(AttentionSoundPlaybackState.Idle)
+
         var lastSoundId: PetSoundId? = null
         var lastLoop = false
         var playCount = 0
+        var pauseCount = 0
+        var resumeCount = 0
         var stopCount = 0
 
+        override fun observePlaybackState(): Flow<AttentionSoundPlaybackState> {
+            return state
+        }
+
         override suspend fun play(
-            soundId: PetSoundId,
-            gain: PetSoundGain,
-            loop: Boolean
+            soundId: PetSoundId, gain: PetSoundGain, loop: Boolean
         ): AttentionSoundPlaybackResult {
             lastSoundId = soundId
             lastLoop = loop
             playCount++
+
+            state.value = AttentionSoundPlaybackState.Playing(soundId, loop)
             return AttentionSoundPlaybackResult.Started
+        }
+
+        override suspend fun pause() {
+            val current = state.value as? AttentionSoundPlaybackState.Playing ?: return
+            pauseCount++
+            state.value = AttentionSoundPlaybackState.Paused(current.soundId, current.looping)
+        }
+
+        override suspend fun resume() {
+            val current = state.value as? AttentionSoundPlaybackState.Paused ?: return
+            resumeCount++
+            state.value = AttentionSoundPlaybackState.Playing(current.soundId, current.looping)
         }
 
         override suspend fun stop() {
             stopCount++
+            state.value = AttentionSoundPlaybackState.Idle
         }
     }
 
@@ -442,14 +460,13 @@ class CameraViewModelTest {
 
             return listOf(
                 PetSound(
-                    id = PetSoundId("dog_01"),
+                    id = PetSoundId("starter:dog_01"),
                     packId = packId,
                     category = PetSoundCategories.Dogs,
                     name = "Dog",
                     source = PetSoundSource.Bundled
-                ),
-                PetSound(
-                    id = PetSoundId("cat_01"),
+                ), PetSound(
+                    id = PetSoundId("starter:cat_01"),
                     packId = packId,
                     category = PetSoundCategories.Cats,
                     name = "Cat",
@@ -463,8 +480,7 @@ class CameraViewModelTest {
                 CameraLens.BACK to CameraLensCapabilities(
                     flashSupported = true,
                     supportedVideoQualities = setOf(VideoQuality.FHD, VideoQuality.HD)
-                ),
-                CameraLens.FRONT to CameraLensCapabilities(
+                ), CameraLens.FRONT to CameraLensCapabilities(
                     flashSupported = false,
                     supportedVideoQualities = setOf(VideoQuality.FHD, VideoQuality.HD)
                 )
@@ -482,19 +498,15 @@ class CameraViewModelTest {
                 flashMode = FlashMode.AUTO,
                 videoQuality = VideoQuality.FHD,
                 recordAudio = recordAudio
-            ),
-            audio = AudioSettings(
+            ), audio = AudioSettings(
                 defaultCategory = PetSoundCategories.Dogs,
                 volumeMode = PetSoundVolumeMode.FollowDevice,
                 customVolumePercent = 75,
                 loopDuringRecording = false,
                 playOnPhotoCapture = true
-            ),
-            sharing = SharingSettings(
-                autoOpenShareAfterCapture = false,
-                preferredQuickShareTarget = null
-            ),
-            experience = ExperienceSettings(
+            ), sharing = SharingSettings(
+                autoOpenShareAfterCapture = false, preferredQuickShareTarget = null
+            ), experience = ExperienceSettings(
                 keepScreenAwakeWhileRecording = true,
                 hapticsEnabled = true,
                 showOnlyAppMedia = true,

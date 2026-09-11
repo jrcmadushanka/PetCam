@@ -8,7 +8,7 @@ import com.civdevops.petcam.core.model.audio.PetSoundCategory
 import com.civdevops.petcam.core.model.audio.PetSoundSource
 import com.civdevops.petcam.core.model.audio.SoundPack
 import com.civdevops.petcam.core.model.audio.SoundPackState
-import com.civdevops.petcam.data.audio.R
+import com.civdevops.petcam.data.audio.generated.GeneratedBundledPetSounds
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,31 +24,29 @@ internal class StarterBundledPetSoundCatalog @Inject constructor(
     )
 
     override val entries: List<BundledPetSoundEntry> by lazy {
-        listOf(
-            entry("dog_01", PetSoundCategories.Dogs, "Dog", R.raw.dog_angry_dog_1),
-            entry("cat_01", PetSoundCategories.Cats, "Cat", R.raw.cat_angry_cat_1),
-            entry("whistle_01", PetSoundCategories.Whistles, "Whistle", R.raw.other_whistle_1),
-            entry("toy_01", PetSoundCategories.Toys, "Squeaky Toy", R.raw.other_cartoon_up_down),
-            entry("other_01", PetSoundCategories.Other, "Attention", R.raw.other_squeaze_normal)
-        )
+        GeneratedBundledPetSounds.entries.map { generated ->
+            BundledPetSoundEntry(
+                sound = PetSound(
+                    id = PetSoundId("${pack.id.rawValue}:${generated.assetKey}"),
+                    packId = pack.id,
+                    category = generated.category.toPetSoundCategory(),
+                    name = generated.displayName,
+                    source = PetSoundSource.Bundled
+                ),
+                rawResourceId = generated.rawResourceId,
+                durationMillis = durationReader.readMillis(generated.rawResourceId)
+            )
+        }
     }
 
-    private fun entry(
-        id: String,
-        category: PetSoundCategory,
-        name: String,
-        rawResourceId: Int
-    ): BundledPetSoundEntry {
-        return BundledPetSoundEntry(
-            sound = PetSound(
-                id = PetSoundId(id),
-                packId = pack.id,
-                category = category,
-                name = name,
-                source = PetSoundSource.Bundled
-            ),
-            rawResourceId = rawResourceId,
-            durationMillis = durationReader.readMillis(rawResourceId)
-        )
+    private fun String.toPetSoundCategory(): PetSoundCategory {
+        return when (this) {
+            PetSoundCategories.Dogs.rawValue -> PetSoundCategories.Dogs
+            PetSoundCategories.Cats.rawValue -> PetSoundCategories.Cats
+            PetSoundCategories.Whistles.rawValue -> PetSoundCategories.Whistles
+            PetSoundCategories.Toys.rawValue -> PetSoundCategories.Toys
+            PetSoundCategories.Other.rawValue -> PetSoundCategories.Other
+            else -> error("Unsupported generated pet sound category: $this")
+        }
     }
 }

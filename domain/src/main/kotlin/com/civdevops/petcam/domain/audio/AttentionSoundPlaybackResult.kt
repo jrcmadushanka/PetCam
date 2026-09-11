@@ -4,7 +4,9 @@ sealed interface AttentionSoundPlaybackResult {
 
     data object Started : AttentionSoundPlaybackResult
 
+    data object Cancelled : AttentionSoundPlaybackResult
+
     data class Failed(
-        val failure: AttentionSoundFailure,
+        val failure: AttentionSoundFailure
     ) : AttentionSoundPlaybackResult
 }

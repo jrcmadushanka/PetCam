@@ -32,7 +32,6 @@
     <string name="camera_video_unavailable">Video unavailable</string>
     <string name="camera_settings">Settings</string>
     <string name="camera_attention_sound">Pet sound</string>
-    <string name="camera_attention_play">Play sound</string>
     <string name="camera_attention_unavailable">No attention sounds available</string>
     <string name="camera_attention_failed">Couldn\'t play sound</string>
     <string name="camera_attention_dogs">Dogs</string>
@@ -40,4 +39,10 @@
     <string name="camera_attention_whistles">Whistles</string>
     <string name="camera_attention_toys">Toys</string>
     <string name="camera_attention_other">Other</string>
+    <string name="camera_attention_picker_title">Choose pet sound</string>
+    <string name="camera_attention_play">Play</string>
+    <string name="camera_attention_pause">Pause</string>
+    <string name="camera_attention_resume">Resume</string>
+    <string name="camera_attention_loading">Loading…</string>
+    <string name="camera_release_to_capture">Release to capture</string>
 </resources>

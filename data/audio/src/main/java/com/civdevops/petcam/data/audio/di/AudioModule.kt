@@ -6,6 +6,8 @@ import com.civdevops.petcam.data.audio.catalog.BundledPetSoundCatalog
 import com.civdevops.petcam.data.audio.catalog.StarterBundledPetSoundCatalog
 import com.civdevops.petcam.data.audio.playback.AndroidAudioFocusController
 import com.civdevops.petcam.data.audio.playback.AudioFocusController
+import com.civdevops.petcam.data.audio.playback.DefaultSoundAssetResolver
+import com.civdevops.petcam.data.audio.playback.SoundAssetResolver
 import com.civdevops.petcam.data.audio.playback.SoundPoolAttentionSoundPlayer
 import com.civdevops.petcam.domain.audio.AttentionSoundPlayer
 import com.civdevops.petcam.domain.repository.PetSoundRepository
@@ -49,4 +51,10 @@ internal abstract class AudioModule {
     abstract fun bindAudioFocusController(
         implementation: AndroidAudioFocusController
     ): AudioFocusController
+
+    @Binds
+    @Singleton
+    abstract fun bindSoundAssetResolver(
+        implementation: DefaultSoundAssetResolver
+    ): SoundAssetResolver
 }

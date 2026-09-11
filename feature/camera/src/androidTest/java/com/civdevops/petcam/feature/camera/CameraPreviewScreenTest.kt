@@ -1,9 +1,12 @@
 package com.civdevops.petcam.feature.camera
 
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import com.civdevops.petcam.core.designsystem.theme.PetCamTheme
 import com.civdevops.petcam.core.model.camera.CameraCapabilities
 import com.civdevops.petcam.core.model.camera.CameraLens
@@ -44,8 +47,8 @@ class CameraPreviewScreenTest {
     }
 
     @Test
-    fun captureButtonDispatchesCaptureAction() {
-        var action: CameraAction? = null
+    fun shutterTouchDispatchesPressThenRelease() {
+        val actions = mutableListOf<CameraAction>()
 
         composeRule.setContent {
             PetCamTheme {
@@ -53,7 +56,7 @@ class CameraPreviewScreenTest {
                     previewStatus = CameraPreviewStatus.READY,
                     uiState = readyState(),
                     canCapturePhoto = true,
-                    onAction = { action = it },
+                    onAction = actions::add,
                     onRequestCameraPermission = {},
                     onRequestCapturePermission = {},
                     onRetry = {},
@@ -63,9 +66,21 @@ class CameraPreviewScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Capture photo").performClick()
+        composeRule.onNodeWithTag(PHOTO_SHUTTER_TEST_TAG).performTouchInput {
+            down(center)
+            advanceEventTime(500)
+            up()
+        }
 
-        assertEquals(CameraAction.CapturePhoto, action)
+        composeRule.waitForIdle()
+
+        assertEquals(
+            listOf(
+                CameraAction.PhotoShutterPressed,
+                CameraAction.PhotoShutterReleased
+            ),
+            actions
+        )
     }
 
     @Test
@@ -181,6 +196,74 @@ class CameraPreviewScreenTest {
         composeRule.onNodeWithText("00:12").assertIsDisplayed()
         composeRule.onNodeWithText("Resume").assertIsDisplayed()
         composeRule.onNodeWithText("Stop").assertIsDisplayed()
+    }
+
+    @Test
+    fun shutterPressAndReleaseDispatchesLegacyPetCamSequence() {
+        val actions = mutableListOf<CameraAction>()
+
+        composeRule.setContent {
+            PetCamTheme {
+                CameraPreviewScreen(
+                    previewStatus = CameraPreviewStatus.READY,
+                    uiState = readyState(),
+                    canCapturePhoto = true,
+                    onAction = actions::add,
+                    onRequestCameraPermission = {},
+                    onRequestCapturePermission = {},
+                    onRetry = {},
+                    previewContent = {},
+                    onOpenSettings = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag(PHOTO_SHUTTER_TEST_TAG).performTouchInput {
+            down(center)
+            advanceEventTime(500)
+            up()
+        }
+
+        composeRule.waitForIdle()
+
+        assertEquals(
+            listOf(
+                CameraAction.PhotoShutterPressed,
+                CameraAction.PhotoShutterReleased
+            ),
+            actions
+        )
+    }
+
+    @Test
+    fun shutterSemanticClickDispatchesCaptureFallback() {
+        val actions = mutableListOf<CameraAction>()
+
+        composeRule.setContent {
+            PetCamTheme {
+                CameraPreviewScreen(
+                    previewStatus = CameraPreviewStatus.READY,
+                    uiState = readyState(),
+                    canCapturePhoto = true,
+                    onAction = actions::add,
+                    onRequestCameraPermission = {},
+                    onRequestCapturePermission = {},
+                    onRetry = {},
+                    previewContent = {},
+                    onOpenSettings = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag(PHOTO_SHUTTER_TEST_TAG)
+            .performSemanticsAction(SemanticsActions.OnClick)
+
+        composeRule.waitForIdle()
+
+        assertEquals(
+            listOf(CameraAction.CapturePhoto),
+            actions
+        )
     }
 
     private fun readyVideoState(

@@ -14,7 +14,8 @@ data class CameraUiState(
     val videoCapture: VideoCaptureState = VideoCaptureState.Idle,
     val recordingCommandFailure: RecordingFailure? = null,
     val videoTorchEnabled: Boolean = false,
-    val attentionSound: AttentionSoundUiState = AttentionSoundUiState()
+    val attentionSound: AttentionSoundUiState = AttentionSoundUiState(),
+    val photoShutterPressed: Boolean = false,
 ) {
     val recordingInProgress: Boolean
         get() = when (recordingState) {

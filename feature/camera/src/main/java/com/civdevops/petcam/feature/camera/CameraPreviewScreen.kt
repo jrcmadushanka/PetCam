@@ -1,34 +1,59 @@
 package com.civdevops.petcam.feature.camera
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.keepScreenOn
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.civdevops.petcam.core.model.PetSoundId
 import com.civdevops.petcam.core.model.audio.PetSoundCategories
 import com.civdevops.petcam.core.model.audio.PetSoundCategory
 import com.civdevops.petcam.core.model.camera.CameraLens
 import com.civdevops.petcam.core.model.camera.CaptureMode
 import com.civdevops.petcam.core.model.camera.FlashMode
 import com.civdevops.petcam.core.model.camera.RecordingState
+import com.civdevops.petcam.domain.audio.AttentionSoundPlaybackState
+
+internal const val PHOTO_SHUTTER_TEST_TAG = "photo_shutter"
 
 @Composable
 fun CameraPreviewScreen(
@@ -167,7 +192,10 @@ private fun CameraCaptureControls(
     ) {
         AttentionSoundControls(
             state = uiState.attentionSound,
-            enabled = !uiState.recordingInProgress,
+            selectionEnabled = !uiState.recordingInProgress && !uiState.photoShutterPressed,
+            playbackEnabled = uiState.recordingState != RecordingState.Preparing &&
+                    uiState.recordingState != RecordingState.Finalizing &&
+                    !uiState.photoShutterPressed,
             onAction = onAction
         )
 
@@ -182,7 +210,8 @@ private fun CameraCaptureControls(
                 captureState = uiState.photoCapture,
                 canCapturePhoto = canCapturePhoto,
                 onAction = onAction,
-                onRequestCapturePermission = onRequestCapturePermission
+                onRequestCapturePermission = onRequestCapturePermission,
+                shutterPressed =  uiState.photoShutterPressed,
             )
 
             CaptureMode.VIDEO -> CameraVideoControls(uiState, onAction)
@@ -190,70 +219,121 @@ private fun CameraCaptureControls(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AttentionSoundControls(
     state: AttentionSoundUiState,
-    enabled: Boolean,
+    selectionEnabled: Boolean,
+    playbackEnabled: Boolean,
     onAction: (CameraAction) -> Unit
 ) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Text(
-            text = stringResource(R.string.camera_attention_sound),
-            color = Color.White,
-            style = MaterialTheme.typography.labelLarge
-        )
+    var showPicker by rememberSaveable { mutableStateOf(false) }
 
-        if (state.categories.isEmpty()) {
+    LaunchedEffect(selectionEnabled) {
+        if (!selectionEnabled) showPicker = false
+    }
+
+    if (state.categories.isEmpty()) {
+        Text(
+            text = stringResource(R.string.camera_attention_unavailable),
+            color = Color.White
+        )
+        return
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        TextButton(
+            enabled = selectionEnabled,
+            onClick = { showPicker = true }
+        ) {
             Text(
-                text = stringResource(R.string.camera_attention_unavailable),
+                text = state.selectedSound?.name
+                    ?: stringResource(R.string.camera_attention_unavailable),
                 color = Color.White
             )
-            return
-        }
-
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            items(state.categories, key = { it.rawValue }) { category ->
-                FilterChip(
-                    selected = state.selectedCategory == category,
-                    enabled = enabled,
-                    onClick = {
-                        onAction(CameraAction.SelectAttentionCategory(category))
-                    },
-                    label = {
-                        Text(attentionCategoryLabel(category))
-                    }
-                )
-            }
-        }
-
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            items(state.sounds, key = { it.id.rawValue }) { sound ->
-                FilterChip(
-                    selected = state.selectedSoundId == sound.id,
-                    enabled = enabled,
-                    onClick = {
-                        onAction(CameraAction.SelectAttentionSound(sound.id))
-                    },
-                    label = { Text(sound.name) }
-                )
-            }
         }
 
         Button(
-            enabled = enabled && state.canPlay,
-            onClick = { onAction(CameraAction.PlayAttentionSound) }
+            enabled = playbackEnabled && state.canPlay &&
+                    state.playbackState !is AttentionSoundPlaybackState.Loading,
+            onClick = { onAction(CameraAction.ToggleAttentionSoundPlayback) }
         ) {
-            Text(stringResource(R.string.camera_attention_play))
+            Text(attentionPlaybackLabel(state.playbackState))
+        }
+    }
+
+    if (state.playbackState is AttentionSoundPlaybackState.Failed) {
+        Text(
+            text = stringResource(R.string.camera_attention_failed),
+            color = MaterialTheme.colorScheme.error
+        )
+    }
+
+    if (showPicker) {
+        ModalBottomSheet(
+            onDismissRequest = { showPicker = false }
+        ) {
+            AttentionSoundPicker(
+                state = state,
+                onCategorySelected = {
+                    onAction(CameraAction.SelectAttentionCategory(it))
+                },
+                onSoundSelected = {
+                    onAction(CameraAction.SelectAttentionSound(it))
+                    showPicker = false
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun AttentionSoundPicker(
+    state: AttentionSoundUiState,
+    onCategorySelected: (PetSoundCategory) -> Unit,
+    onSoundSelected: (PetSoundId) -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(
+            text = stringResource(R.string.camera_attention_picker_title),
+            style = MaterialTheme.typography.titleLarge
+        )
+
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(state.categories, key = { it.rawValue }) { category ->
+                FilterChip(
+                    selected = state.selectedCategory == category,
+                    onClick = { onCategorySelected(category) },
+                    label = { Text(attentionCategoryLabel(category)) }
+                )
+            }
         }
 
-        if (state.failure != null) {
-            Text(
-                text = stringResource(R.string.camera_attention_failed),
-                color = MaterialTheme.colorScheme.error
-            )
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            items(state.sounds, key = { it.id.rawValue }) { sound ->
+                TextButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { onSoundSelected(sound.id) }
+                ) {
+                    Text(
+                        text = if (state.selectedSoundId == sound.id) {
+                            "✓ ${sound.name}"
+                        } else {
+                            sound.name
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
         }
     }
 }
@@ -267,6 +347,26 @@ private fun attentionCategoryLabel(category: PetSoundCategory): String {
         PetSoundCategories.Toys -> stringResource(R.string.camera_attention_toys)
         PetSoundCategories.Other -> stringResource(R.string.camera_attention_other)
         else -> category.rawValue
+    }
+}
+
+@Composable
+private fun attentionPlaybackLabel(
+    state: AttentionSoundPlaybackState
+): String {
+    return when (state) {
+        AttentionSoundPlaybackState.Idle,
+        is AttentionSoundPlaybackState.Failed ->
+            stringResource(R.string.camera_attention_play)
+
+        is AttentionSoundPlaybackState.Loading ->
+            stringResource(R.string.camera_attention_loading)
+
+        is AttentionSoundPlaybackState.Playing ->
+            stringResource(R.string.camera_attention_pause)
+
+        is AttentionSoundPlaybackState.Paused ->
+            stringResource(R.string.camera_attention_resume)
     }
 }
 
@@ -602,11 +702,14 @@ private fun CameraFailedContent(
 @Composable
 private fun CameraShutterControls(
     captureState: PhotoCaptureState,
+    shutterPressed: Boolean,
     canCapturePhoto: Boolean,
     onAction: (CameraAction) -> Unit,
     onRequestCapturePermission: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val enabled = captureState != PhotoCaptureState.Capturing
+
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -625,19 +728,96 @@ private fun CameraShutterControls(
             else -> Unit
         }
 
-        Button(
-            enabled = captureState != PhotoCaptureState.Capturing,
-            onClick = {
-                if (canCapturePhoto) onAction(CameraAction.CapturePhoto)
-                else onRequestCapturePermission()
+        PhotoShutterButton(
+            enabled = enabled,
+            shutterPressed = shutterPressed,
+            canCapturePhoto = canCapturePhoto,
+            onAction = onAction,
+            onRequestCapturePermission = onRequestCapturePermission
+        )
+    }
+}
+
+@Composable
+private fun PhotoShutterButton(
+    enabled: Boolean,
+    shutterPressed: Boolean,
+    canCapturePhoto: Boolean,
+    onAction: (CameraAction) -> Unit,
+    onRequestCapturePermission: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val currentOnAction by rememberUpdatedState(onAction)
+    val currentPermissionRequest by rememberUpdatedState(onRequestCapturePermission)
+
+    val interactionModifier = Modifier
+        .testTag(PHOTO_SHUTTER_TEST_TAG)
+        .semantics(mergeDescendants = true) {
+            role = Role.Button
+
+            if (!enabled) disabled()
+
+            onClick {
+                if (!enabled) return@onClick false
+
+                if (canCapturePhoto) {
+                    currentOnAction(CameraAction.CapturePhoto)
+                } else {
+                    currentPermissionRequest()
+                }
+
+                true
             }
+        }
+        .pointerInput(enabled, canCapturePhoto) {
+            if (!enabled) return@pointerInput
+
+            detectTapGestures(
+                onPress = {
+                    if (!canCapturePhoto) {
+                        if (tryAwaitRelease()) {
+                            currentPermissionRequest()
+                        }
+
+                        return@detectTapGestures
+                    }
+
+                    currentOnAction(CameraAction.PhotoShutterPressed)
+
+                    if (tryAwaitRelease()) {
+                        currentOnAction(CameraAction.PhotoShutterReleased)
+                    } else {
+                        currentOnAction(CameraAction.PhotoShutterCancelled)
+                    }
+                }
+            )
+        }
+
+    Surface(
+        modifier = modifier.then(interactionModifier),
+        shape = CircleShape,
+        color = if (shutterPressed) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        },
+        contentColor = if (shutterPressed) {
+            MaterialTheme.colorScheme.onPrimary
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        }
+    ) {
+        Box(
+            modifier = Modifier.size(88.dp),
+            contentAlignment = Alignment.Center
         ) {
             Text(
-                if (captureState == PhotoCaptureState.Capturing) {
-                    stringResource(R.string.camera_capturing)
+                text = if (shutterPressed) {
+                    stringResource(R.string.camera_release_to_capture)
                 } else {
                     stringResource(R.string.camera_capture_photo)
-                }
+                },
+                style = MaterialTheme.typography.labelMedium
             )
         }
     }

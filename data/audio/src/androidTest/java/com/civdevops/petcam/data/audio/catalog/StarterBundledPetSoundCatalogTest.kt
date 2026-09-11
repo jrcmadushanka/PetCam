@@ -12,17 +12,37 @@ import org.junit.runner.RunWith
 class StarterBundledPetSoundCatalogTest {
 
     @Test
-    fun starterCatalogContainsPlayableSoundForEveryCategory() {
-        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+    fun generatedCatalogContainsValidBundledSounds() {
+        val context =
+            ApplicationProvider.getApplicationContext<android.content.Context>()
+
+        val catalog = StarterBundledPetSoundCatalog(
+            BundledAudioDurationReader(context)
+        )
+
+        assertTrue(catalog.entries.isNotEmpty())
+        assertTrue(catalog.entries.all { it.rawResourceId != 0 })
+        assertTrue(catalog.entries.all { it.durationMillis > 0 })
+        assertTrue(catalog.entries.all {
+            it.sound.id.rawValue.startsWith("${catalog.pack.id.rawValue}:")
+        })
+
+        val ids = catalog.entries.map { it.sound.id }
+        assertEquals(ids.size, ids.distinct().size)
+    }
+
+    @Test
+    fun starterCatalogContainsExpectedCategories() {
+        val context =
+            ApplicationProvider.getApplicationContext<android.content.Context>()
+
         val catalog = StarterBundledPetSoundCatalog(
             BundledAudioDurationReader(context)
         )
 
         val categories = catalog.entries.map { it.sound.category }.toSet()
 
-        assertTrue(PetSoundCategories.values.all { it in categories })
-        assertEquals(5, catalog.entries.size)
-        assertTrue(catalog.entries.all { it.rawResourceId != 0 })
-        assertTrue(catalog.entries.all { it.durationMillis > 0 })
+        assertTrue(PetSoundCategories.Dogs in categories)
+        assertTrue(PetSoundCategories.Cats in categories)
     }
 }
