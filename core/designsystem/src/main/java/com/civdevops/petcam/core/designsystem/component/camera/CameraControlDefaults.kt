@@ -24,6 +24,7 @@ object CameraControlTokens {
     val supportingPaneMaxWidth: Dp = 400.dp
     val compactControlsMaxWidth: Dp = 480.dp
     val overlayContentMaxWidth: Dp = 560.dp
+    val supportingPanePreferredWidth: Dp = 360.dp
 
     const val disabledContentAlpha = 0.38f
     const val secondaryContentAlpha = 0.72f

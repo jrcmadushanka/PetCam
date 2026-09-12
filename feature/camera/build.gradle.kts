@@ -21,6 +21,7 @@ dependencies {
     implementation(libs.androidx.ui)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.compose.animation)
+    implementation(libs.androidx.compose.material3.adaptive)
 
     testImplementation(project(":core:testing"))
     testImplementation(libs.junit)

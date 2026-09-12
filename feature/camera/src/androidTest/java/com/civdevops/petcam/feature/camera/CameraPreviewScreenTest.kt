@@ -1,5 +1,7 @@
 package com.civdevops.petcam.feature.camera
 
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -574,5 +576,48 @@ class CameraPreviewScreenTest {
             ),
             photoCapture = PhotoCaptureState.Idle
         )
+    }
+
+    @Test
+    fun attentionSoundSupportingPaneIsDisplayedWhenComposed() {
+        composeRule.setContent {
+            PetCamTheme {
+                AttentionSoundSupportingPane(
+                    state = readyState().attentionSound,
+                    selectionEnabled = true,
+                    playbackEnabled = false,
+                    onAction = {},
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+
+        composeRule
+            .onNodeWithTag(ATTENTION_SOUND_SUPPORTING_PANE_TEST_TAG)
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun compactLayoutDoesNotShowAttentionSoundSupportingPane() {
+        composeRule.setContent {
+            PetCamTheme {
+                CameraPreviewScreenContent(
+                    previewStatus = CameraPreviewStatus.READY,
+                    uiState = readyState(),
+                    layoutMode = CameraLayoutMode.COMPACT,
+                    canCapturePhoto = true,
+                    onAction = {},
+                    onRequestCameraPermission = {},
+                    onRequestCapturePermission = {},
+                    onRetry = {},
+                    previewContent = {},
+                    onOpenSettings = {}
+                )
+            }
+        }
+
+        composeRule
+            .onNodeWithTag(ATTENTION_SOUND_SUPPORTING_PANE_TEST_TAG)
+            .assertDoesNotExist()
     }
 }

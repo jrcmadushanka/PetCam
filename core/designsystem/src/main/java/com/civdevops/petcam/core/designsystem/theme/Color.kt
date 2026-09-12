@@ -22,3 +22,4 @@ val OnCameraControl = Color(0xFFF7F7F7)
 
 val CameraRecording = Color(0xFFE5484D)
 val OnCameraRecording = Color(0xFFFFFFFF)
+val CameraPreviewBackground = Color(0xFF000000)
