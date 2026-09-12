@@ -72,6 +72,9 @@ androidx-camera-compose = { module = "androidx.camera:camera-compose", version.r
 androidx-camera-viewfinder-compose = { module = "androidx.camera.viewfinder:viewfinder-compose", version.ref = "camerax" }
 androidx-camera-video = { module = "androidx.camera:camera-video", version.ref = "camerax" }
 androidx-ui = { group = "androidx.compose.ui", name = "ui", version.ref = "ui" }
+androidx-compose-animation-core = { module = "androidx.compose.animation:animation-core" }
+androidx-compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
+androidx-compose-animation = { module = "androidx.compose.animation:animation" }
 
 [plugins]
 

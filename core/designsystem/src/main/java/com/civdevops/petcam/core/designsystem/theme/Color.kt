@@ -15,3 +15,10 @@ val Gray = Color(0xFFA3A3A3)
 val GrayDark = Color(0xFF404040)
 
 val ErrorRed = Color(0xFFEF4444)
+
+val CameraScrim = Color(0x99000000)
+val CameraControlSurface = Color(0xB31A1A1A)
+val OnCameraControl = Color(0xFFF7F7F7)
+
+val CameraRecording = Color(0xFFE5484D)
+val OnCameraRecording = Color(0xFFFFFFFF)

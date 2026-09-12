@@ -45,4 +45,9 @@
     <string name="camera_attention_resume">Resume</string>
     <string name="camera_attention_loading">Loading…</string>
     <string name="camera_release_to_capture">Release to capture</string>
+    <string name="camera_current_lens_back">Using back camera</string>
+    <string name="camera_current_lens_front">Using front camera</string>
+    <string name="camera_torch_off">Torch off</string>
+    <string name="camera_torch_on">Torch on</string>
+    <string name="camera_torch_unavailable">Torch unavailable</string>
 </resources>
