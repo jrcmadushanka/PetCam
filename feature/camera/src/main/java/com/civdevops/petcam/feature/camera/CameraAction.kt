@@ -24,6 +24,6 @@ sealed interface CameraAction {
     data class SelectAttentionCategory(val category: PetSoundCategory) : CameraAction
     data class SelectAttentionSound(val soundId: PetSoundId) : CameraAction
     data object ToggleAttentionSoundPlayback : CameraAction
-
+    data object CameraActive : CameraAction
     data object CameraInactive : CameraAction
 }

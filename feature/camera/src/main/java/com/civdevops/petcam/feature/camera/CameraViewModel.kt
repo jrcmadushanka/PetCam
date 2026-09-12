@@ -94,7 +94,8 @@ class CameraViewModel @Inject constructor(
     val effects = _effects.asSharedFlow()
 
     private var pendingVideoStart: VideoRecordingRequest? = null
-
+    private var cameraActive = true
+    private var cameraInteractionGeneration = 0L
     private val cameraSettings = appSettings.map { it.camera }
 
     private val configurationState: Flow<CameraConfigurationState> =
@@ -219,6 +220,8 @@ class CameraViewModel @Inject constructor(
         val request = pendingVideoStart ?: return
         pendingVideoStart = null
 
+        if (!cameraActive) return
+
         if (granted && uiState.value.captureMode == CaptureMode.VIDEO) {
             startVideo(request)
         } else if (!granted) {
@@ -242,15 +245,23 @@ class CameraViewModel @Inject constructor(
             CameraAction.ToggleVideoTorch -> toggleVideoTorch()
             is CameraAction.SelectAttentionCategory -> selectAttentionCategory(action.category)
             is CameraAction.SelectAttentionSound -> selectAttentionSound(action.soundId)
-            CameraAction.CameraInactive -> onCameraInactive()
             CameraAction.PhotoShutterPressed -> onPhotoShutterPressed()
             CameraAction.PhotoShutterReleased -> onPhotoShutterReleased()
             CameraAction.PhotoShutterCancelled -> onPhotoShutterCancelled()
             CameraAction.ToggleAttentionSoundPlayback -> toggleAttentionSoundPlayback()
+            CameraAction.CameraActive -> onCameraActive()
+            CameraAction.CameraInactive -> onCameraInactive()
         }
     }
 
+    private fun onCameraActive() {
+        cameraActive = true
+    }
+
     private fun onCameraInactive() {
+        cameraActive = false
+        cameraInteractionGeneration++
+        pendingVideoStart = null
         photoShutterPressed.value = false
 
         photoShutterSoundJob?.cancel()
@@ -402,6 +413,8 @@ class CameraViewModel @Inject constructor(
     }
 
     private fun requestVideoStart() {
+        if (!cameraActive) return
+
         val state = uiState.value
         if (state.captureMode != CaptureMode.VIDEO || state.recordingInProgress) return
 
@@ -427,6 +440,8 @@ class CameraViewModel @Inject constructor(
     }
 
     private fun startVideo(request: VideoRecordingRequest) {
+        val generation = cameraInteractionGeneration
+
         viewModelScope.launch {
             videoUiState.value = videoUiState.value.copy(
                 captureState = VideoCaptureState.Idle,
@@ -435,6 +450,23 @@ class CameraViewModel @Inject constructor(
 
             when (val result = startVideoRecordingUseCase(request)) {
                 RecordingCommandResult.Success -> {
+                    val startIsStale =
+                        !cameraActive || generation != cameraInteractionGeneration
+
+                    if (startIsStale) {
+                        stopAttentionSoundSafely()
+
+                        try {
+                            stopVideoRecordingUseCase()
+                        } catch (cancellation: CancellationException) {
+                            throw cancellation
+                        } catch (_: Exception) {
+                            // Camera lifecycle may already have finalized the recording.
+                        }
+
+                        return@launch
+                    }
+
                     val settings = appSettings.first().audio
 
                     if (settings.loopDuringRecording) {
@@ -442,11 +474,14 @@ class CameraViewModel @Inject constructor(
                         playSelectedAttentionSound(settings, loop = true)
                     }
                 }
+
                 is RecordingCommandResult.Failed -> {
-                    videoUiState.value = videoUiState.value.copy(
-                        captureState = VideoCaptureState.Failed(result.failure),
-                        commandFailure = null
-                    )
+                    if (generation == cameraInteractionGeneration) {
+                        videoUiState.value = videoUiState.value.copy(
+                            captureState = VideoCaptureState.Failed(result.failure),
+                            commandFailure = null
+                        )
+                    }
                 }
             }
         }
@@ -636,10 +671,7 @@ class CameraViewModel @Inject constructor(
     private suspend fun pauseAttentionSoundSafely(origin: AttentionPauseOrigin) {
         try {
             pauseAttentionSoundUseCase()
-
-            if (attentionSoundState.value.playbackState is AttentionSoundPlaybackState.Paused) {
-                attentionPauseOrigin = origin
-            }
+            attentionPauseOrigin = origin
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (_: Exception) {

@@ -30,6 +30,8 @@ fun CameraRoute(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LifecycleStartEffect(viewModel) {
+        viewModel.onAction(CameraAction.CameraActive)
+
         onStopOrDispose {
             viewModel.onAction(CameraAction.CameraInactive)
         }
