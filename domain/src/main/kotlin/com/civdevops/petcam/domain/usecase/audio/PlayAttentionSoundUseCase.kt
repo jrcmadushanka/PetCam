@@ -4,8 +4,9 @@ import com.civdevops.petcam.core.model.PetSoundId
 import com.civdevops.petcam.core.model.settings.AudioSettings
 import com.civdevops.petcam.domain.audio.AttentionSoundPlaybackResult
 import com.civdevops.petcam.domain.audio.AttentionSoundPlayer
+import javax.inject.Inject
 
-class PlayAttentionSoundUseCase(
+class PlayAttentionSoundUseCase @Inject constructor(
     private val attentionSoundPlayer: AttentionSoundPlayer,
     private val resolveEffectiveSoundGainUseCase:
     ResolveEffectiveSoundGainUseCase,

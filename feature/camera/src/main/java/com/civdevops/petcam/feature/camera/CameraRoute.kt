@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.civdevops.petcam.core.model.camera.CameraCapabilities
 import com.civdevops.petcam.core.model.camera.CameraLens
@@ -27,6 +28,14 @@ fun CameraRoute(
     viewModel: CameraViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    LifecycleStartEffect(viewModel) {
+        viewModel.onAction(CameraAction.CameraActive)
+
+        onStopOrDispose {
+            viewModel.onAction(CameraAction.CameraInactive)
+        }
+    }
 
     LaunchedEffect(capabilities) {
         viewModel.onCapabilitiesChanged(capabilities)

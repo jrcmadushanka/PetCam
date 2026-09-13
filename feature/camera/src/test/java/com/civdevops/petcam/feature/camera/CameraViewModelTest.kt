@@ -1,12 +1,18 @@
 package com.civdevops.petcam.feature.camera
 
 import com.civdevops.petcam.core.model.MediaId
-import com.civdevops.petcam.core.model.audio.PetSoundCategory
+import com.civdevops.petcam.core.model.PetSoundId
+import com.civdevops.petcam.core.model.SoundPackId
+import com.civdevops.petcam.core.model.audio.PetSound
+import com.civdevops.petcam.core.model.audio.PetSoundCategories
+import com.civdevops.petcam.core.model.audio.PetSoundGain
+import com.civdevops.petcam.core.model.audio.PetSoundSource
 import com.civdevops.petcam.core.model.camera.CameraCapabilities
 import com.civdevops.petcam.core.model.camera.CameraLens
 import com.civdevops.petcam.core.model.camera.CameraLensCapabilities
 import com.civdevops.petcam.core.model.camera.CaptureMode
 import com.civdevops.petcam.core.model.camera.FlashMode
+import com.civdevops.petcam.core.model.camera.RecordingFailure
 import com.civdevops.petcam.core.model.camera.RecordingState
 import com.civdevops.petcam.core.model.camera.VideoQuality
 import com.civdevops.petcam.core.model.settings.AppSettings
@@ -16,6 +22,10 @@ import com.civdevops.petcam.core.model.settings.ExperienceSettings
 import com.civdevops.petcam.core.model.settings.PetSoundVolumeMode
 import com.civdevops.petcam.core.model.settings.SharingSettings
 import com.civdevops.petcam.core.testing.MainDispatcherRule
+import com.civdevops.petcam.domain.audio.AttentionSoundFailure
+import com.civdevops.petcam.domain.audio.AttentionSoundPlaybackResult
+import com.civdevops.petcam.domain.audio.AttentionSoundPlaybackState
+import com.civdevops.petcam.domain.audio.AttentionSoundPlayer
 import com.civdevops.petcam.domain.camera.CameraOperationResult
 import com.civdevops.petcam.domain.camera.PhotoCaptureFailure
 import com.civdevops.petcam.domain.camera.PhotoCaptureResult
@@ -23,7 +33,15 @@ import com.civdevops.petcam.domain.camera.RecordingCommandResult
 import com.civdevops.petcam.domain.camera.VideoRecordingRequest
 import com.civdevops.petcam.domain.camera.VideoRecordingResult
 import com.civdevops.petcam.domain.repository.CameraRepository
+import com.civdevops.petcam.domain.repository.PetSoundRepository
 import com.civdevops.petcam.domain.repository.SettingsRepository
+import com.civdevops.petcam.domain.usecase.audio.ObserveAttentionSoundPlaybackStateUseCase
+import com.civdevops.petcam.domain.usecase.audio.ObservePlayablePetSoundsUseCase
+import com.civdevops.petcam.domain.usecase.audio.PauseAttentionSoundUseCase
+import com.civdevops.petcam.domain.usecase.audio.PlayAttentionSoundUseCase
+import com.civdevops.petcam.domain.usecase.audio.ResolveEffectiveSoundGainUseCase
+import com.civdevops.petcam.domain.usecase.audio.ResumeAttentionSoundUseCase
+import com.civdevops.petcam.domain.usecase.audio.StopAttentionSoundUseCase
 import com.civdevops.petcam.domain.usecase.camera.CapturePhotoUseCase
 import com.civdevops.petcam.domain.usecase.camera.ObserveRecordingStateUseCase
 import com.civdevops.petcam.domain.usecase.camera.PauseVideoRecordingUseCase
@@ -35,6 +53,7 @@ import com.civdevops.petcam.domain.usecase.camera.SetTorchEnabledUseCase
 import com.civdevops.petcam.domain.usecase.camera.StartVideoRecordingUseCase
 import com.civdevops.petcam.domain.usecase.camera.StopVideoRecordingUseCase
 import com.civdevops.petcam.domain.usecase.settings.ObserveSettingsUseCase
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -45,6 +64,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -126,8 +146,7 @@ class CameraViewModelTest {
     fun `video without audio starts without microphone permission`() = runTest {
         val repository = FakeCameraRepository()
         val viewModel = createViewModel(
-            repository,
-            sampleSettings(defaultMode = CaptureMode.VIDEO, recordAudio = false)
+            repository, sampleSettings(defaultMode = CaptureMode.VIDEO, recordAudio = false)
         )
 
         backgroundScope.launch { viewModel.uiState.collect() }
@@ -147,8 +166,7 @@ class CameraViewModelTest {
     fun `video with audio requests microphone permission before recording`() = runTest {
         val repository = FakeCameraRepository()
         val viewModel = createViewModel(
-            repository,
-            sampleSettings(defaultMode = CaptureMode.VIDEO, recordAudio = true)
+            repository, sampleSettings(defaultMode = CaptureMode.VIDEO, recordAudio = true)
         )
 
         backgroundScope.launch { viewModel.uiState.collect() }
@@ -176,8 +194,7 @@ class CameraViewModelTest {
     fun `mode and lens cannot change while recording`() = runTest {
         val repository = FakeCameraRepository()
         val viewModel = createViewModel(
-            repository,
-            sampleSettings(defaultMode = CaptureMode.VIDEO, recordAudio = false)
+            repository, sampleSettings(defaultMode = CaptureMode.VIDEO, recordAudio = false)
         )
 
         backgroundScope.launch { viewModel.uiState.collect() }
@@ -208,8 +225,7 @@ class CameraViewModelTest {
     fun `pause resume and stop recording follow valid lifecycle`() = runTest {
         val repository = FakeCameraRepository()
         val viewModel = createViewModel(
-            repository,
-            sampleSettings(defaultMode = CaptureMode.VIDEO, recordAudio = false)
+            repository, sampleSettings(defaultMode = CaptureMode.VIDEO, recordAudio = false)
         )
 
         backgroundScope.launch { viewModel.uiState.collect() }
@@ -245,11 +261,8 @@ class CameraViewModelTest {
     fun `video flash toggles torch`() = runTest {
         val repository = FakeCameraRepository()
         val viewModel = createViewModel(
-            repository,
-            sampleSettings(
-                defaultMode = CaptureMode.VIDEO,
-                recordAudio = false,
-                defaultLens = CameraLens.BACK
+            repository, sampleSettings(
+                defaultMode = CaptureMode.VIDEO, recordAudio = false, defaultLens = CameraLens.BACK
             )
         )
 
@@ -268,11 +281,581 @@ class CameraViewModelTest {
         assertTrue(viewModel.uiState.value.videoTorchEnabled)
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `default audio category selects playable sound`() = runTest {
+        val viewModel = createViewModel(
+            cameraRepository = FakeCameraRepository(), settings = sampleSettings()
+        )
+
+        backgroundScope.launch { viewModel.uiState.collect() }
+        viewModel.onCapabilitiesChanged(testCapabilities())
+        advanceUntilIdle()
+
+        assertEquals(
+            PetSoundCategories.Dogs, viewModel.uiState.value.attentionSound.selectedCategory
+        )
+
+        assertEquals(
+            PetSoundId("starter:dog_01"), viewModel.uiState.value.attentionSound.selectedSoundId
+        )
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `permission result does not start video after camera becomes inactive`() = runTest {
+        val repository = FakeCameraRepository()
+        val viewModel = createViewModel(
+            cameraRepository = repository,
+            settings = sampleSettings(defaultMode = CaptureMode.VIDEO, recordAudio = true)
+        )
+
+        backgroundScope.launch { viewModel.uiState.collect() }
+
+        viewModel.onCapabilitiesChanged(testCapabilities())
+        advanceUntilIdle()
+
+        val effect = async(start = CoroutineStart.UNDISPATCHED) {
+            viewModel.effects.first()
+        }
+
+        viewModel.onAction(CameraAction.StartVideoRecording)
+
+        assertEquals(CameraEffect.RequestMicrophonePermission, effect.await())
+        assertEquals(null, repository.startRequest)
+
+        viewModel.onAction(CameraAction.CameraInactive)
+        viewModel.onMicrophonePermissionChanged(true)
+        advanceUntilIdle()
+
+        assertEquals(null, repository.startRequest)
+        assertEquals(RecordingState.Idle, repository.recordingState.value)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `late successful video start is stopped after camera becomes inactive`() = runTest {
+        val repository = FakeCameraRepository()
+        val startGate = CompletableDeferred<Unit>()
+        val attentionPlayer = FakeAttentionSoundPlayer()
+
+        repository.startGate = startGate
+
+        val viewModel = createViewModel(
+            cameraRepository = repository,
+            settings = sampleSettings(defaultMode = CaptureMode.VIDEO, recordAudio = false),
+            attentionPlayer = attentionPlayer
+        )
+
+        backgroundScope.launch { viewModel.uiState.collect() }
+
+        viewModel.onCapabilitiesChanged(testCapabilities())
+        advanceUntilIdle()
+
+        viewModel.onAction(CameraAction.StartVideoRecording)
+        runCurrent()
+
+        assertEquals(false, repository.startRequest?.recordAudio)
+
+        viewModel.onAction(CameraAction.CameraInactive)
+        startGate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.stopCount)
+        assertEquals(RecordingState.Idle, repository.recordingState.value)
+        assertEquals(0, attentionPlayer.playCount)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `photo shutter press plays looping sound and release captures exactly once`() = runTest {
+        val mediaId = MediaId("content://petcam/test/attention-photo")
+        val repository = FakeCameraRepository(PhotoCaptureResult.Saved(mediaId))
+        val attentionPlayer = FakeAttentionSoundPlayer()
+        val viewModel = createViewModel(
+            cameraRepository = repository,
+            settings = sampleSettings(defaultMode = CaptureMode.PHOTO),
+            attentionPlayer = attentionPlayer
+        )
+
+        backgroundScope.launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        viewModel.onAction(CameraAction.PhotoShutterPressed)
+        advanceUntilIdle()
+
+        assertEquals(1, attentionPlayer.playCount)
+        assertEquals(true, attentionPlayer.lastLoop)
+        assertEquals(
+            PetSoundId("starter:dog_01"),
+            attentionPlayer.lastSoundId
+        )
+        assertEquals(true, viewModel.uiState.value.photoShutterPressed)
+        assertEquals(0, repository.captureCount)
+
+        viewModel.onAction(CameraAction.PhotoShutterReleased)
+        advanceUntilIdle()
+
+        assertEquals(1, attentionPlayer.stopCount)
+        assertEquals(1, repository.captureCount)
+        assertEquals(false, viewModel.uiState.value.photoShutterPressed)
+        assertEquals(
+            PhotoCaptureState.Saved(mediaId),
+            viewModel.uiState.value.photoCapture
+        )
+
+        viewModel.onAction(CameraAction.PhotoShutterReleased)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.captureCount)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `photo shutter cancellation stops sound without capturing`() = runTest {
+        val repository = FakeCameraRepository()
+        val attentionPlayer = FakeAttentionSoundPlayer()
+        val viewModel = createViewModel(
+            cameraRepository = repository,
+            settings = sampleSettings(defaultMode = CaptureMode.PHOTO),
+            attentionPlayer = attentionPlayer
+        )
+
+        backgroundScope.launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        viewModel.onAction(CameraAction.PhotoShutterPressed)
+        advanceUntilIdle()
+
+        assertEquals(1, attentionPlayer.playCount)
+        assertEquals(true, attentionPlayer.lastLoop)
+        assertEquals(true, viewModel.uiState.value.photoShutterPressed)
+
+        viewModel.onAction(CameraAction.PhotoShutterCancelled)
+        advanceUntilIdle()
+
+        assertEquals(1, attentionPlayer.stopCount)
+        assertEquals(0, repository.captureCount)
+        assertEquals(false, viewModel.uiState.value.photoShutterPressed)
+        assertEquals(
+            PhotoCaptureState.Idle,
+            viewModel.uiState.value.photoCapture
+        )
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `repeated photo shutter press while held does not restart sound`() = runTest {
+        val repository = FakeCameraRepository()
+        val attentionPlayer = FakeAttentionSoundPlayer()
+        val viewModel = createViewModel(
+            cameraRepository = repository,
+            attentionPlayer = attentionPlayer
+        )
+
+        backgroundScope.launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        viewModel.onAction(CameraAction.PhotoShutterPressed)
+        viewModel.onAction(CameraAction.PhotoShutterPressed)
+        advanceUntilIdle()
+
+        assertEquals(1, attentionPlayer.playCount)
+        assertEquals(true, attentionPlayer.lastLoop)
+
+        viewModel.onAction(CameraAction.PhotoShutterCancelled)
+        advanceUntilIdle()
+
+        assertEquals(1, attentionPlayer.stopCount)
+        assertEquals(0, repository.captureCount)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `audio playback failure does not prevent photo capture`() = runTest {
+        val mediaId = MediaId("content://petcam/test/audio-failure-photo")
+        val repository = FakeCameraRepository(PhotoCaptureResult.Saved(mediaId))
+        val attentionPlayer = FakeAttentionSoundPlayer().apply {
+            playResult = AttentionSoundPlaybackResult.Failed(
+                AttentionSoundFailure.PLAYBACK_FAILED
+            )
+        }
+
+        val viewModel = createViewModel(
+            cameraRepository = repository,
+            attentionPlayer = attentionPlayer
+        )
+
+        backgroundScope.launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        viewModel.onAction(CameraAction.CapturePhoto)
+        advanceUntilIdle()
+
+        assertEquals(1, attentionPlayer.playCount)
+        assertEquals(1, repository.captureCount)
+        assertEquals(
+            PhotoCaptureState.Saved(mediaId),
+            viewModel.uiState.value.photoCapture
+        )
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `unexpected audio exception does not prevent photo capture`() = runTest {
+        val mediaId = MediaId("content://petcam/test/audio-exception-photo")
+        val repository = FakeCameraRepository(PhotoCaptureResult.Saved(mediaId))
+        val attentionPlayer = FakeAttentionSoundPlayer().apply {
+            playException = IllegalStateException("Simulated player failure")
+        }
+
+        val viewModel = createViewModel(
+            cameraRepository = repository,
+            attentionPlayer = attentionPlayer
+        )
+
+        backgroundScope.launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        viewModel.onAction(CameraAction.CapturePhoto)
+        advanceUntilIdle()
+
+        assertEquals(1, attentionPlayer.playCount)
+        assertEquals(1, repository.captureCount)
+        assertEquals(
+            PhotoCaptureState.Saved(mediaId),
+            viewModel.uiState.value.photoCapture
+        )
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `disabled photo attention setting captures without playing sound`() = runTest {
+        val mediaId = MediaId("content://petcam/test/silent-photo")
+        val repository = FakeCameraRepository(PhotoCaptureResult.Saved(mediaId))
+        val attentionPlayer = FakeAttentionSoundPlayer()
+
+        val viewModel = createViewModel(
+            cameraRepository = repository,
+            settings = sampleSettings(playOnPhotoCapture = false),
+            attentionPlayer = attentionPlayer
+        )
+
+        backgroundScope.launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        viewModel.onAction(CameraAction.PhotoShutterPressed)
+        advanceUntilIdle()
+
+        assertEquals(0, attentionPlayer.playCount)
+
+        viewModel.onAction(CameraAction.PhotoShutterReleased)
+        advanceUntilIdle()
+
+        assertEquals(0, attentionPlayer.playCount)
+        assertEquals(1, repository.captureCount)
+        assertEquals(
+            PhotoCaptureState.Saved(mediaId),
+            viewModel.uiState.value.photoCapture
+        )
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `recording pause and resume control automatically playing attention sound`() = runTest {
+        val repository = FakeCameraRepository()
+        val attentionPlayer = FakeAttentionSoundPlayer()
+        val viewModel = createViewModel(
+            cameraRepository = repository,
+            settings = sampleSettings(
+                defaultMode = CaptureMode.VIDEO,
+                recordAudio = false,
+                loopDuringRecording = true
+            ),
+            attentionPlayer = attentionPlayer
+        )
+
+        backgroundScope.launch { viewModel.uiState.collect() }
+
+        viewModel.onCapabilitiesChanged(testCapabilities())
+        advanceUntilIdle()
+
+        viewModel.onAction(CameraAction.StartVideoRecording)
+        advanceUntilIdle()
+
+        assertEquals(1, attentionPlayer.playCount)
+        assertEquals(true, attentionPlayer.lastLoop)
+        assertTrue(
+            attentionPlayer.state.value is AttentionSoundPlaybackState.Playing
+        )
+
+        viewModel.onAction(CameraAction.PauseVideoRecording)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.pauseCount)
+        assertEquals(1, attentionPlayer.pauseCount)
+        assertTrue(
+            attentionPlayer.state.value is AttentionSoundPlaybackState.Paused
+        )
+
+        viewModel.onAction(CameraAction.ResumeVideoRecording)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.resumeCount)
+        assertEquals(1, attentionPlayer.resumeCount)
+        assertTrue(
+            attentionPlayer.state.value is AttentionSoundPlaybackState.Playing
+        )
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `recording resume does not override manually paused attention sound`() = runTest {
+        val repository = FakeCameraRepository()
+        val attentionPlayer = FakeAttentionSoundPlayer()
+        val viewModel = createViewModel(
+            cameraRepository = repository,
+            settings = sampleSettings(
+                defaultMode = CaptureMode.VIDEO,
+                recordAudio = false,
+                loopDuringRecording = true
+            ),
+            attentionPlayer = attentionPlayer
+        )
+
+        backgroundScope.launch { viewModel.uiState.collect() }
+
+        viewModel.onCapabilitiesChanged(testCapabilities())
+        advanceUntilIdle()
+
+        viewModel.onAction(CameraAction.StartVideoRecording)
+        advanceUntilIdle()
+
+        assertEquals(1, attentionPlayer.playCount)
+        assertTrue(
+            attentionPlayer.state.value is AttentionSoundPlaybackState.Playing
+        )
+
+        viewModel.onAction(CameraAction.ToggleAttentionSoundPlayback)
+        advanceUntilIdle()
+
+        assertEquals(1, attentionPlayer.pauseCount)
+        assertTrue(
+            attentionPlayer.state.value is AttentionSoundPlaybackState.Paused
+        )
+
+        viewModel.onAction(CameraAction.PauseVideoRecording)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.pauseCount)
+        assertEquals(1, attentionPlayer.pauseCount)
+
+        viewModel.onAction(CameraAction.ResumeVideoRecording)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.resumeCount)
+        assertEquals(0, attentionPlayer.resumeCount)
+        assertTrue(
+            attentionPlayer.state.value is AttentionSoundPlaybackState.Paused
+        )
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `video recording does not start attention sound when looping is disabled`() = runTest {
+        val repository = FakeCameraRepository()
+        val attentionPlayer = FakeAttentionSoundPlayer()
+        val viewModel = createViewModel(
+            cameraRepository = repository,
+            settings = sampleSettings(
+                defaultMode = CaptureMode.VIDEO,
+                recordAudio = false,
+                loopDuringRecording = false
+            ),
+            attentionPlayer = attentionPlayer
+        )
+
+        backgroundScope.launch { viewModel.uiState.collect() }
+
+        viewModel.onCapabilitiesChanged(testCapabilities())
+        advanceUntilIdle()
+
+        viewModel.onAction(CameraAction.StartVideoRecording)
+        advanceUntilIdle()
+
+        assertTrue(
+            repository.recordingState.value is RecordingState.Recording
+        )
+        assertEquals(0, attentionPlayer.playCount)
+        assertEquals(
+            AttentionSoundPlaybackState.Idle,
+            attentionPlayer.state.value
+        )
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `stopping video stops attention sound`() = runTest {
+        val repository = FakeCameraRepository()
+        val attentionPlayer = FakeAttentionSoundPlayer()
+        val viewModel = createViewModel(
+            cameraRepository = repository,
+            settings = sampleSettings(
+                defaultMode = CaptureMode.VIDEO,
+                recordAudio = false,
+                loopDuringRecording = true
+            ),
+            attentionPlayer = attentionPlayer
+        )
+
+        backgroundScope.launch { viewModel.uiState.collect() }
+
+        viewModel.onCapabilitiesChanged(testCapabilities())
+        advanceUntilIdle()
+
+        viewModel.onAction(CameraAction.StartVideoRecording)
+        advanceUntilIdle()
+
+        assertEquals(1, attentionPlayer.playCount)
+        assertTrue(
+            attentionPlayer.state.value is AttentionSoundPlaybackState.Playing
+        )
+
+        viewModel.onAction(CameraAction.StopVideoRecording)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.stopCount)
+        assertTrue(attentionPlayer.stopCount >= 1)
+        assertEquals(
+            AttentionSoundPlaybackState.Idle,
+            attentionPlayer.state.value
+        )
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `recording finalization stops attention sound`() = runTest {
+        val repository = FakeCameraRepository()
+        val attentionPlayer = FakeAttentionSoundPlayer()
+        val viewModel = createViewModel(
+            cameraRepository = repository,
+            settings = sampleSettings(
+                defaultMode = CaptureMode.VIDEO,
+                recordAudio = false,
+                loopDuringRecording = true
+            ),
+            attentionPlayer = attentionPlayer
+        )
+
+        backgroundScope.launch { viewModel.uiState.collect() }
+
+        viewModel.onCapabilitiesChanged(testCapabilities())
+        advanceUntilIdle()
+
+        viewModel.onAction(CameraAction.StartVideoRecording)
+        advanceUntilIdle()
+
+        assertEquals(1, attentionPlayer.playCount)
+
+        val stopCountBeforeFinalizing = attentionPlayer.stopCount
+        repository.recordingState.value = RecordingState.Finalizing
+        advanceUntilIdle()
+
+        assertTrue(
+            attentionPlayer.stopCount > stopCountBeforeFinalizing
+        )
+        assertEquals(
+            AttentionSoundPlaybackState.Idle,
+            attentionPlayer.state.value
+        )
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `recording failure stops attention sound`() = runTest {
+        val repository = FakeCameraRepository()
+        val attentionPlayer = FakeAttentionSoundPlayer()
+        val viewModel = createViewModel(
+            cameraRepository = repository,
+            settings = sampleSettings(
+                defaultMode = CaptureMode.VIDEO,
+                recordAudio = false,
+                loopDuringRecording = true
+            ),
+            attentionPlayer = attentionPlayer
+        )
+
+        backgroundScope.launch { viewModel.uiState.collect() }
+
+        viewModel.onCapabilitiesChanged(testCapabilities())
+        advanceUntilIdle()
+
+        viewModel.onAction(CameraAction.StartVideoRecording)
+        advanceUntilIdle()
+
+        assertEquals(1, attentionPlayer.playCount)
+
+        val stopCountBeforeFailure = attentionPlayer.stopCount
+        repository.recordingState.value =
+            RecordingState.Failed(RecordingFailure.UNKNOWN)
+
+        advanceUntilIdle()
+
+        assertTrue(
+            attentionPlayer.stopCount > stopCountBeforeFailure
+        )
+        assertEquals(
+            AttentionSoundPlaybackState.Idle,
+            attentionPlayer.state.value
+        )
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `camera lifecycle exit stops attention sound`() = runTest {
+        val repository = FakeCameraRepository()
+        val attentionPlayer = FakeAttentionSoundPlayer()
+        val viewModel = createViewModel(
+            cameraRepository = repository,
+            settings = sampleSettings(
+                defaultMode = CaptureMode.VIDEO,
+                recordAudio = false,
+                loopDuringRecording = true
+            ),
+            attentionPlayer = attentionPlayer
+        )
+
+        backgroundScope.launch { viewModel.uiState.collect() }
+
+        viewModel.onCapabilitiesChanged(testCapabilities())
+        advanceUntilIdle()
+
+        viewModel.onAction(CameraAction.StartVideoRecording)
+        advanceUntilIdle()
+
+        assertEquals(1, attentionPlayer.playCount)
+
+        val stopCountBeforeExit = attentionPlayer.stopCount
+        viewModel.onAction(CameraAction.CameraInactive)
+        advanceUntilIdle()
+
+        assertTrue(
+            attentionPlayer.stopCount > stopCountBeforeExit
+        )
+        assertEquals(
+            AttentionSoundPlaybackState.Idle,
+            attentionPlayer.state.value
+        )
+    }
+
     private fun createViewModel(
         cameraRepository: CameraRepository,
-        settings: AppSettings = sampleSettings()
+        settings: AppSettings = sampleSettings(),
+        attentionPlayer: AttentionSoundPlayer = FakeAttentionSoundPlayer()
     ): CameraViewModel {
         val settingsRepository = FakeSettingsRepository(settings)
+        val soundRepository = FakePetSoundRepository(testSounds())
+        val gainUseCase = ResolveEffectiveSoundGainUseCase()
 
         return CameraViewModel(
             observeSettingsUseCase = ObserveSettingsUseCase(settingsRepository),
@@ -285,8 +868,88 @@ class CameraViewModelTest {
             pauseVideoRecordingUseCase = PauseVideoRecordingUseCase(cameraRepository),
             resumeVideoRecordingUseCase = ResumeVideoRecordingUseCase(cameraRepository),
             stopVideoRecordingUseCase = StopVideoRecordingUseCase(cameraRepository),
-            setTorchEnabledUseCase = SetTorchEnabledUseCase(cameraRepository)
+            setTorchEnabledUseCase = SetTorchEnabledUseCase(cameraRepository),
+            observePlayablePetSoundsUseCase = ObservePlayablePetSoundsUseCase(soundRepository),
+            playAttentionSoundUseCase = PlayAttentionSoundUseCase(attentionPlayer, gainUseCase),
+            stopAttentionSoundUseCase = StopAttentionSoundUseCase(attentionPlayer),
+            observeAttentionSoundPlaybackStateUseCase = ObserveAttentionSoundPlaybackStateUseCase(attentionPlayer),
+            pauseAttentionSoundUseCase = PauseAttentionSoundUseCase(attentionPlayer),
+            resumeAttentionSoundUseCase = ResumeAttentionSoundUseCase(attentionPlayer),
         )
+    }
+
+    private class FakePetSoundRepository(private val sounds: List<PetSound>) : PetSoundRepository {
+
+        override fun observePetSounds(): Flow<List<PetSound>> = flowOf(sounds)
+
+        override suspend fun getPetSound(id: PetSoundId): PetSound? {
+            return sounds.firstOrNull { it.id == id }
+        }
+    }
+
+    private class FakeAttentionSoundPlayer : AttentionSoundPlayer {
+
+        val state = MutableStateFlow<AttentionSoundPlaybackState>(AttentionSoundPlaybackState.Idle)
+
+        var lastSoundId: PetSoundId? = null
+        var lastLoop = false
+        var playCount = 0
+        var pauseCount = 0
+        var resumeCount = 0
+        var stopCount = 0
+        var playResult: AttentionSoundPlaybackResult =
+            AttentionSoundPlaybackResult.Started
+
+        var playException: RuntimeException? = null
+
+        override fun observePlaybackState(): Flow<AttentionSoundPlaybackState> {
+            return state
+        }
+
+        override suspend fun play(
+            soundId: PetSoundId,
+            gain: PetSoundGain,
+            loop: Boolean
+        ): AttentionSoundPlaybackResult {
+            playCount++
+            lastSoundId = soundId
+            lastLoop = loop
+
+            playException?.let { throw it }
+
+            when (val result = playResult) {
+                AttentionSoundPlaybackResult.Started -> {
+                    state.value = AttentionSoundPlaybackState.Playing(soundId, loop)
+                }
+
+                AttentionSoundPlaybackResult.Cancelled -> {
+                    state.value = AttentionSoundPlaybackState.Idle
+                }
+
+                is AttentionSoundPlaybackResult.Failed -> {
+                    state.value = AttentionSoundPlaybackState.Failed(result.failure)
+                }
+            }
+
+            return playResult
+        }
+
+        override suspend fun pause() {
+            val current = state.value as? AttentionSoundPlaybackState.Playing ?: return
+            pauseCount++
+            state.value = AttentionSoundPlaybackState.Paused(current.soundId, current.looping)
+        }
+
+        override suspend fun resume() {
+            val current = state.value as? AttentionSoundPlaybackState.Paused ?: return
+            resumeCount++
+            state.value = AttentionSoundPlaybackState.Playing(current.soundId, current.looping)
+        }
+
+        override suspend fun stop() {
+            stopCount++
+            state.value = AttentionSoundPlaybackState.Idle
+        }
     }
 
     private class FakeCameraRepository(
@@ -296,6 +959,7 @@ class CameraViewModelTest {
         val recordingState = MutableStateFlow<RecordingState>(RecordingState.Idle)
 
         var startRequest: VideoRecordingRequest? = null
+        var startGate: CompletableDeferred<Unit>? = null
         var pauseCount = 0
         var resumeCount = 0
         var stopCount = 0
@@ -318,6 +982,7 @@ class CameraViewModelTest {
 
         override suspend fun startVideoRecording(request: VideoRecordingRequest): RecordingCommandResult {
             startRequest = request
+            startGate?.await()
             recordingState.value = RecordingState.Recording(0)
             return RecordingCommandResult.Success
         }
@@ -365,13 +1030,32 @@ class CameraViewModelTest {
 
     private companion object {
 
+        fun testSounds(): List<PetSound> {
+            val packId = SoundPackId("starter")
+
+            return listOf(
+                PetSound(
+                    id = PetSoundId("starter:dog_01"),
+                    packId = packId,
+                    category = PetSoundCategories.Dogs,
+                    name = "Dog",
+                    source = PetSoundSource.Bundled
+                ), PetSound(
+                    id = PetSoundId("starter:cat_01"),
+                    packId = packId,
+                    category = PetSoundCategories.Cats,
+                    name = "Cat",
+                    source = PetSoundSource.Bundled
+                )
+            )
+        }
+
         fun testCapabilities() = CameraCapabilities(
             mapOf(
                 CameraLens.BACK to CameraLensCapabilities(
                     flashSupported = true,
                     supportedVideoQualities = setOf(VideoQuality.FHD, VideoQuality.HD)
-                ),
-                CameraLens.FRONT to CameraLensCapabilities(
+                ), CameraLens.FRONT to CameraLensCapabilities(
                     flashSupported = false,
                     supportedVideoQualities = setOf(VideoQuality.FHD, VideoQuality.HD)
                 )
@@ -381,7 +1065,9 @@ class CameraViewModelTest {
         fun sampleSettings(
             defaultMode: CaptureMode = CaptureMode.PHOTO,
             recordAudio: Boolean = true,
-            defaultLens: CameraLens = CameraLens.FRONT
+            defaultLens: CameraLens = CameraLens.FRONT,
+            playOnPhotoCapture: Boolean = true,
+            loopDuringRecording: Boolean = false
         ) = AppSettings(
             camera = CameraSettings(
                 defaultMode = defaultMode,
@@ -389,19 +1075,15 @@ class CameraViewModelTest {
                 flashMode = FlashMode.AUTO,
                 videoQuality = VideoQuality.FHD,
                 recordAudio = recordAudio
-            ),
-            audio = AudioSettings(
-                defaultCategory = PetSoundCategory("dogs"),
+            ), audio = AudioSettings(
+                defaultCategory = PetSoundCategories.Dogs,
                 volumeMode = PetSoundVolumeMode.FollowDevice,
                 customVolumePercent = 75,
-                loopDuringRecording = false,
-                playOnPhotoCapture = true
-            ),
-            sharing = SharingSettings(
-                autoOpenShareAfterCapture = false,
-                preferredQuickShareTarget = null
-            ),
-            experience = ExperienceSettings(
+                loopDuringRecording = loopDuringRecording,
+                playOnPhotoCapture = playOnPhotoCapture
+            ), sharing = SharingSettings(
+                autoOpenShareAfterCapture = false, preferredQuickShareTarget = null
+            ), experience = ExperienceSettings(
                 keepScreenAwakeWhileRecording = true,
                 hapticsEnabled = true,
                 showOnlyAppMedia = true,

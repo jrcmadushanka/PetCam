@@ -10,4 +10,8 @@ dependencies {
     implementation(libs.kotlin.compose.gradlePlugin)
     implementation(libs.hilt.gradlePlugin)
     implementation(libs.ksp.gradlePlugin)
+
+    testImplementation(gradleTestKit())
+    testImplementation(kotlin("test"))
+    testImplementation(libs.junit)
 }

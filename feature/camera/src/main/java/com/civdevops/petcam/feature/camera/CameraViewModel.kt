@@ -2,17 +2,32 @@ package com.civdevops.petcam.feature.camera
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.civdevops.petcam.core.model.PetSoundId
+import com.civdevops.petcam.core.model.audio.PetSound
+import com.civdevops.petcam.core.model.audio.PetSoundCategories
+import com.civdevops.petcam.core.model.audio.PetSoundCategory
 import com.civdevops.petcam.core.model.camera.CameraCapabilities
 import com.civdevops.petcam.core.model.camera.CameraLens
 import com.civdevops.petcam.core.model.camera.CaptureMode
 import com.civdevops.petcam.core.model.camera.FlashMode
 import com.civdevops.petcam.core.model.camera.RecordingFailure
+import com.civdevops.petcam.core.model.camera.RecordingState
+import com.civdevops.petcam.core.model.settings.AudioSettings
+import com.civdevops.petcam.domain.audio.AttentionSoundFailure
+import com.civdevops.petcam.domain.audio.AttentionSoundPlaybackResult
+import com.civdevops.petcam.domain.audio.AttentionSoundPlaybackState
 import com.civdevops.petcam.domain.camera.CameraOperationResult
 import com.civdevops.petcam.domain.camera.PhotoCaptureFailure
 import com.civdevops.petcam.domain.camera.PhotoCaptureResult
 import com.civdevops.petcam.domain.camera.RecordingCommandResult
 import com.civdevops.petcam.domain.camera.VideoRecordingRequest
 import com.civdevops.petcam.domain.camera.VideoRecordingResult
+import com.civdevops.petcam.domain.usecase.audio.ObserveAttentionSoundPlaybackStateUseCase
+import com.civdevops.petcam.domain.usecase.audio.ObservePlayablePetSoundsUseCase
+import com.civdevops.petcam.domain.usecase.audio.PauseAttentionSoundUseCase
+import com.civdevops.petcam.domain.usecase.audio.PlayAttentionSoundUseCase
+import com.civdevops.petcam.domain.usecase.audio.ResumeAttentionSoundUseCase
+import com.civdevops.petcam.domain.usecase.audio.StopAttentionSoundUseCase
 import com.civdevops.petcam.domain.usecase.camera.CapturePhotoUseCase
 import com.civdevops.petcam.domain.usecase.camera.ObserveRecordingStateUseCase
 import com.civdevops.petcam.domain.usecase.camera.PauseVideoRecordingUseCase
@@ -26,12 +41,15 @@ import com.civdevops.petcam.domain.usecase.camera.StopVideoRecordingUseCase
 import com.civdevops.petcam.domain.usecase.settings.ObserveSettingsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -49,7 +67,13 @@ class CameraViewModel @Inject constructor(
     private val pauseVideoRecordingUseCase: PauseVideoRecordingUseCase,
     private val resumeVideoRecordingUseCase: ResumeVideoRecordingUseCase,
     private val stopVideoRecordingUseCase: StopVideoRecordingUseCase,
-    private val setTorchEnabledUseCase: SetTorchEnabledUseCase
+    private val setTorchEnabledUseCase: SetTorchEnabledUseCase,
+    private val observePlayablePetSoundsUseCase: ObservePlayablePetSoundsUseCase,
+    private val playAttentionSoundUseCase: PlayAttentionSoundUseCase,
+    private val stopAttentionSoundUseCase: StopAttentionSoundUseCase,
+    private val observeAttentionSoundPlaybackStateUseCase: ObserveAttentionSoundPlaybackStateUseCase,
+    private val pauseAttentionSoundUseCase: PauseAttentionSoundUseCase,
+    private val resumeAttentionSoundUseCase: ResumeAttentionSoundUseCase,
 ) : ViewModel() {
 
     private val appSettings = observeSettingsUseCase()
@@ -60,12 +84,18 @@ class CameraViewModel @Inject constructor(
     private val microphonePermissionGranted = MutableStateFlow(false)
     private val photoCaptureState = MutableStateFlow<PhotoCaptureState>(PhotoCaptureState.Idle)
     private val videoUiState = MutableStateFlow(VideoUiState())
+    private val selectedAttentionCategory = MutableStateFlow<PetSoundCategory?>(null)
+    private val selectedAttentionSound = MutableStateFlow<PetSoundId?>(null)
+    private val photoShutterPressed = MutableStateFlow(false)
+    private var photoShutterSoundJob: Job? = null
 
+    private var attentionPauseOrigin: AttentionPauseOrigin? = null
     private val _effects = MutableSharedFlow<CameraEffect>(extraBufferCapacity = 1)
     val effects = _effects.asSharedFlow()
 
     private var pendingVideoStart: VideoRecordingRequest? = null
-
+    private var cameraActive = true
+    private var cameraInteractionGeneration = 0L
     private val cameraSettings = appSettings.map { it.camera }
 
     private val configurationState: Flow<CameraConfigurationState> =
@@ -104,13 +134,52 @@ class CameraViewModel @Inject constructor(
         )
     }
 
+    private val attentionSelectionState = combine(
+        observePlayablePetSoundsUseCase(),
+        appSettings.map { it.audio.defaultCategory }.distinctUntilChanged(),
+        selectedAttentionCategory,
+        selectedAttentionSound
+    ) { sounds, defaultCategory, categoryOverride, soundOverride ->
+        createAttentionSoundSelection(
+            sounds = sounds,
+            defaultCategory = defaultCategory,
+            categoryOverride = categoryOverride,
+            soundOverride = soundOverride
+        )
+    }
+
+    private val attentionSoundState = combine(
+        attentionSelectionState,
+        observeAttentionSoundPlaybackStateUseCase()
+    ) { selection, playback ->
+        AttentionSoundUiState(
+            categories = selection.categories,
+            selectedCategory = selection.selectedCategory,
+            sounds = selection.sounds,
+            selectedSoundId = selection.selectedSoundId,
+            playbackState = playback
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = AttentionSoundUiState()
+    )
+
+    private val auxiliaryUiState = combine(
+        videoUiState,
+        attentionSoundState,
+        photoShutterPressed
+    ) { video, attention, shutterPressed ->
+        AuxiliaryUiState(video, attention, shutterPressed)
+    }
+
     val uiState = combine(
         configurationState,
         presentationSettings,
         photoCaptureState,
         observeRecordingStateUseCase(),
-        videoUiState
-    ) { configuration, presentation, photoCapture, recordingState, video ->
+        auxiliaryUiState
+    ) { configuration, presentation, photoCapture, recordingState, auxiliary ->
         CameraUiState(
             configuration = configuration,
             captureMode = presentation.captureMode,
@@ -118,15 +187,28 @@ class CameraViewModel @Inject constructor(
             keepScreenAwakeWhileRecording = presentation.keepScreenAwake,
             photoCapture = photoCapture,
             recordingState = recordingState,
-            videoCapture = video.captureState,
-            recordingCommandFailure = video.commandFailure,
-            videoTorchEnabled = video.torchEnabled
+            videoCapture = auxiliary.video.captureState,
+            recordingCommandFailure = auxiliary.video.commandFailure,
+            videoTorchEnabled = auxiliary.video.torchEnabled,
+            attentionSound = auxiliary.attention,
+            photoShutterPressed = auxiliary.photoShutterPressed
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = CameraUiState()
     )
+
+    init {
+        viewModelScope.launch {
+            observeRecordingStateUseCase().collect { state ->
+                if (state is RecordingState.Failed ||
+                    state == RecordingState.Finalizing) {
+                    stopAttentionSoundSafely()
+                }
+            }
+        }
+    }
 
     fun onCapabilitiesChanged(value: CameraCapabilities?) {
         capabilities.value = value
@@ -137,6 +219,8 @@ class CameraViewModel @Inject constructor(
 
         val request = pendingVideoStart ?: return
         pendingVideoStart = null
+
+        if (!cameraActive) return
 
         if (granted && uiState.value.captureMode == CaptureMode.VIDEO) {
             startVideo(request)
@@ -155,11 +239,36 @@ class CameraViewModel @Inject constructor(
             CameraAction.CapturePhoto -> capturePhoto()
             is CameraAction.SetCaptureMode -> setCaptureMode(action.mode)
             CameraAction.StartVideoRecording -> requestVideoStart()
-            CameraAction.PauseVideoRecording -> runRecordingCommand { pauseVideoRecordingUseCase() }
-            CameraAction.ResumeVideoRecording -> runRecordingCommand { resumeVideoRecordingUseCase() }
+            CameraAction.PauseVideoRecording -> pauseVideo()
+            CameraAction.ResumeVideoRecording -> resumeVideo()
             CameraAction.StopVideoRecording -> stopVideo()
             CameraAction.ToggleVideoTorch -> toggleVideoTorch()
+            is CameraAction.SelectAttentionCategory -> selectAttentionCategory(action.category)
+            is CameraAction.SelectAttentionSound -> selectAttentionSound(action.soundId)
+            CameraAction.PhotoShutterPressed -> onPhotoShutterPressed()
+            CameraAction.PhotoShutterReleased -> onPhotoShutterReleased()
+            CameraAction.PhotoShutterCancelled -> onPhotoShutterCancelled()
+            CameraAction.ToggleAttentionSoundPlayback -> toggleAttentionSoundPlayback()
+            CameraAction.CameraActive -> onCameraActive()
+            CameraAction.CameraInactive -> onCameraInactive()
         }
+    }
+
+    private fun onCameraActive() {
+        cameraActive = true
+    }
+
+    private fun onCameraInactive() {
+        cameraActive = false
+        cameraInteractionGeneration++
+        pendingVideoStart = null
+        photoShutterPressed.value = false
+
+        photoShutterSoundJob?.cancel()
+        photoShutterSoundJob = null
+
+        attentionPauseOrigin = null
+        stopAttentionSound()
     }
 
     private fun setCaptureMode(mode: CaptureMode) {
@@ -167,6 +276,8 @@ class CameraViewModel @Inject constructor(
 
         if (state.recordingInProgress) return
         if (state.captureMode == mode) return
+
+        stopAttentionSound()
 
         pendingVideoStart = null
 
@@ -222,28 +333,88 @@ class CameraViewModel @Inject constructor(
         }
     }
 
-    private fun capturePhoto() {
+    private fun onPhotoShutterPressed() {
         val state = uiState.value
+
         if (state.captureMode != CaptureMode.PHOTO || state.recordingInProgress) return
         if (photoCaptureState.value == PhotoCaptureState.Capturing) return
+        if (photoShutterPressed.value) return
 
-        viewModelScope.launch {
-            photoCaptureState.value = PhotoCaptureState.Capturing
+        photoShutterPressed.value = true
+        photoShutterSoundJob?.cancel()
 
-            photoCaptureState.value = try {
-                when (val result = capturePhotoUseCase()) {
-                    is PhotoCaptureResult.Saved -> PhotoCaptureState.Saved(result.mediaId)
-                    is PhotoCaptureResult.Failed -> PhotoCaptureState.Failed(result.failure)
-                }
-            } catch (cancellation: CancellationException) {
-                throw cancellation
-            } catch (_: Exception) {
-                PhotoCaptureState.Failed(PhotoCaptureFailure.UNKNOWN)
+        photoShutterSoundJob = viewModelScope.launch {
+            val settings = appSettings.first().audio
+
+            if (photoShutterPressed.value && settings.playOnPhotoCapture) {
+                playSelectedAttentionSound(settings, loop = true)
             }
         }
     }
 
+    private fun onPhotoShutterReleased() {
+        if (!photoShutterPressed.value) return
+        if (photoCaptureState.value == PhotoCaptureState.Capturing) return
+
+        photoShutterPressed.value = false
+
+        photoShutterSoundJob?.cancel()
+        photoShutterSoundJob = null
+
+        photoCaptureState.value = PhotoCaptureState.Capturing
+
+        viewModelScope.launch {
+            stopAttentionSoundSafely()
+            performPhotoCapture()
+        }
+    }
+
+    private fun onPhotoShutterCancelled() {
+        if (!photoShutterPressed.value) return
+
+        photoShutterPressed.value = false
+
+        photoShutterSoundJob?.cancel()
+        photoShutterSoundJob = null
+
+        stopAttentionSound()
+    }
+
+    private fun capturePhoto() {
+        val state = uiState.value
+
+        if (state.captureMode != CaptureMode.PHOTO || state.recordingInProgress) return
+        if (photoCaptureState.value == PhotoCaptureState.Capturing) return
+
+        photoCaptureState.value = PhotoCaptureState.Capturing
+
+        viewModelScope.launch {
+            val settings = appSettings.first().audio
+
+            if (settings.playOnPhotoCapture) {
+                playSelectedAttentionSound(settings, loop = false)
+            }
+
+            performPhotoCapture()
+        }
+    }
+
+    private suspend fun performPhotoCapture() {
+        photoCaptureState.value = try {
+            when (val result = capturePhotoUseCase()) {
+                is PhotoCaptureResult.Saved -> PhotoCaptureState.Saved(result.mediaId)
+                is PhotoCaptureResult.Failed -> PhotoCaptureState.Failed(result.failure)
+            }
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Exception) {
+            PhotoCaptureState.Failed(PhotoCaptureFailure.UNKNOWN)
+        }
+    }
+
     private fun requestVideoStart() {
+        if (!cameraActive) return
+
         val state = uiState.value
         if (state.captureMode != CaptureMode.VIDEO || state.recordingInProgress) return
 
@@ -269,6 +440,8 @@ class CameraViewModel @Inject constructor(
     }
 
     private fun startVideo(request: VideoRecordingRequest) {
+        val generation = cameraInteractionGeneration
+
         viewModelScope.launch {
             videoUiState.value = videoUiState.value.copy(
                 captureState = VideoCaptureState.Idle,
@@ -276,26 +449,81 @@ class CameraViewModel @Inject constructor(
             )
 
             when (val result = startVideoRecordingUseCase(request)) {
-                RecordingCommandResult.Success -> Unit
+                RecordingCommandResult.Success -> {
+                    val startIsStale =
+                        !cameraActive || generation != cameraInteractionGeneration
+
+                    if (startIsStale) {
+                        stopAttentionSoundSafely()
+
+                        try {
+                            stopVideoRecordingUseCase()
+                        } catch (cancellation: CancellationException) {
+                            throw cancellation
+                        } catch (_: Exception) {
+                            // Camera lifecycle may already have finalized the recording.
+                        }
+
+                        return@launch
+                    }
+
+                    val settings = appSettings.first().audio
+
+                    if (settings.loopDuringRecording) {
+                        attentionPauseOrigin = null
+                        playSelectedAttentionSound(settings, loop = true)
+                    }
+                }
+
                 is RecordingCommandResult.Failed -> {
-                    videoUiState.value = videoUiState.value.copy(
-                        captureState = VideoCaptureState.Failed(result.failure),
-                        commandFailure = null
-                    )
+                    if (generation == cameraInteractionGeneration) {
+                        videoUiState.value = videoUiState.value.copy(
+                            captureState = VideoCaptureState.Failed(result.failure),
+                            commandFailure = null
+                        )
+                    }
                 }
             }
         }
     }
 
-    private fun runRecordingCommand(command: suspend () -> RecordingCommandResult) {
+    private fun pauseVideo() {
         viewModelScope.launch {
-            when (val result = command()) {
+            when (val result = pauseVideoRecordingUseCase()) {
                 RecordingCommandResult.Success -> {
                     videoUiState.value = videoUiState.value.copy(commandFailure = null)
+
+                    if (attentionSoundState.value.playbackState is AttentionSoundPlaybackState.Playing) {
+                        pauseAttentionSoundSafely(AttentionPauseOrigin.RECORDING)
+                    }
                 }
 
                 is RecordingCommandResult.Failed -> {
-                    videoUiState.value = videoUiState.value.copy(commandFailure = result.failure)
+                    videoUiState.value =
+                        videoUiState.value.copy(commandFailure = result.failure)
+                }
+            }
+        }
+    }
+
+    private fun resumeVideo() {
+        viewModelScope.launch {
+            when (val result = resumeVideoRecordingUseCase()) {
+                RecordingCommandResult.Success -> {
+                    videoUiState.value = videoUiState.value.copy(commandFailure = null)
+
+                    val shouldResume =
+                        attentionPauseOrigin == AttentionPauseOrigin.RECORDING &&
+                                attentionSoundState.value.playbackState is AttentionSoundPlaybackState.Paused
+
+                    if (shouldResume) {
+                        resumeAttentionSoundSafely()
+                    }
+                }
+
+                is RecordingCommandResult.Failed -> {
+                    videoUiState.value =
+                        videoUiState.value.copy(commandFailure = result.failure)
                 }
             }
         }
@@ -303,6 +531,8 @@ class CameraViewModel @Inject constructor(
 
     private fun stopVideo() {
         viewModelScope.launch {
+            stopAttentionSoundSafely()
+
             videoUiState.value = videoUiState.value.copy(commandFailure = null)
 
             when (val result = stopVideoRecordingUseCase()) {
@@ -345,6 +575,147 @@ class CameraViewModel @Inject constructor(
         }
     }
 
+    private fun createAttentionSoundSelection(
+        sounds: List<PetSound>,
+        defaultCategory: PetSoundCategory,
+        categoryOverride: PetSoundCategory?,
+        soundOverride: PetSoundId?
+    ): AttentionSoundSelection {
+        val availableCategories = sounds.map { it.category }.distinct()
+
+        val categories = PetSoundCategories.values.filter { it in availableCategories } +
+                availableCategories.filterNot { it in PetSoundCategories.values }
+
+        val requestedCategory = categoryOverride ?: defaultCategory
+        val effectiveCategory = requestedCategory.takeIf { it in categories }
+            ?: categories.firstOrNull()
+
+        val categorySounds = effectiveCategory
+            ?.let { category -> sounds.filter { it.category == category } }
+            .orEmpty()
+
+        val effectiveSound = categorySounds.firstOrNull { it.id == soundOverride }
+            ?: categorySounds.firstOrNull()
+
+        return AttentionSoundSelection(
+            categories = categories,
+            selectedCategory = effectiveCategory,
+            sounds = categorySounds,
+            selectedSoundId = effectiveSound?.id
+        )
+    }
+
+    private fun selectAttentionCategory(category: PetSoundCategory) {
+        if (uiState.value.recordingInProgress) return
+        if (category !in attentionSoundState.value.categories) return
+
+        stopAttentionSound()
+        selectedAttentionCategory.value = category
+        selectedAttentionSound.value = null
+    }
+
+    private fun selectAttentionSound(soundId: PetSoundId) {
+        if (uiState.value.recordingInProgress) return
+        if (attentionSoundState.value.sounds.none { it.id == soundId }) return
+
+        stopAttentionSound()
+        selectedAttentionSound.value = soundId
+    }
+
+    private fun toggleAttentionSoundPlayback() {
+        when (attentionSoundState.value.playbackState) {
+            AttentionSoundPlaybackState.Idle,
+            is AttentionSoundPlaybackState.Failed -> {
+                viewModelScope.launch {
+                    attentionPauseOrigin = null
+
+                    val settings = appSettings.first().audio
+                    val loop = uiState.value.recordingState is RecordingState.Recording &&
+                            settings.loopDuringRecording
+
+                    playSelectedAttentionSound(settings, loop)
+                }
+            }
+
+            is AttentionSoundPlaybackState.Loading -> Unit
+
+            is AttentionSoundPlaybackState.Playing -> {
+                viewModelScope.launch {
+                    pauseAttentionSoundSafely(AttentionPauseOrigin.USER)
+                }
+            }
+
+            is AttentionSoundPlaybackState.Paused -> {
+                viewModelScope.launch {
+                    resumeAttentionSoundSafely()
+                }
+            }
+        }
+    }
+
+    private suspend fun playSelectedAttentionSound(
+        settings: AudioSettings,
+        loop: Boolean
+    ) {
+        val soundId = attentionSoundState.value.selectedSoundId ?: return
+
+        try {
+            playAttentionSoundUseCase(soundId, settings, loop)
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Exception) {
+            // Player exposes failure through playback state.
+        }
+    }
+
+    private suspend fun pauseAttentionSoundSafely(origin: AttentionPauseOrigin) {
+        try {
+            pauseAttentionSoundUseCase()
+            attentionPauseOrigin = origin
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Exception) {
+            // Attention audio must never break camera operations.
+        }
+    }
+
+    private suspend fun resumeAttentionSoundSafely() {
+        try {
+            resumeAttentionSoundUseCase()
+            attentionPauseOrigin = null
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Exception) {
+            // Attention audio must never break camera operations.
+        }
+    }
+
+    private suspend fun stopAttentionSoundSafely() {
+        try {
+            stopAttentionSoundUseCase()
+            attentionPauseOrigin = null
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Exception) {
+            // Attention audio must never break camera operations.
+        }
+    }
+
+    private fun stopAttentionSound() {
+        viewModelScope.launch {
+            stopAttentionSoundSafely()
+        }
+    }
+
+    private fun previewAttentionSound() {
+        if (uiState.value.recordingInProgress) return
+
+        viewModelScope.launch {
+            val settings = appSettings.first().audio
+            playSelectedAttentionSound(settings, loop = false)
+        }
+    }
+
     private data class CameraPresentationSettings(
         val captureMode: CaptureMode,
         val recordAudio: Boolean,
@@ -356,4 +727,22 @@ class CameraViewModel @Inject constructor(
         val commandFailure: RecordingFailure? = null,
         val torchEnabled: Boolean = false
     )
+
+    private data class AuxiliaryUiState(
+        val video: VideoUiState,
+        val attention: AttentionSoundUiState,
+        val photoShutterPressed: Boolean
+    )
+
+    private data class AttentionSoundSelection(
+        val categories: List<PetSoundCategory>,
+        val selectedCategory: PetSoundCategory?,
+        val sounds: List<PetSound>,
+        val selectedSoundId: PetSoundId?
+    )
+
+    private enum class AttentionPauseOrigin {
+        USER,
+        RECORDING
+    }
 }

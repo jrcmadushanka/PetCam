@@ -44,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.civdevops.petcam.core.designsystem.theme.PetCamSpacing
+import com.civdevops.petcam.core.model.audio.PetSoundCategories
 import com.civdevops.petcam.core.model.audio.PetSoundCategory
 import com.civdevops.petcam.core.model.camera.CameraLens
 import com.civdevops.petcam.core.model.camera.CaptureMode
@@ -634,10 +635,6 @@ private fun AudioSettingsContent(
     val audio =
         settings.audio
 
-    /*
-     * Phase 6 will replace this starter list with
-     * categories exposed by the sound catalog.
-     */
     SettingsChoiceGroup(
         title = androidx.compose.ui.res.stringResource(
             R.string.settings_default_sound_category,
@@ -645,35 +642,25 @@ private fun AudioSettingsContent(
         selectedValue = audio.defaultCategory,
         choices = listOf(
             SettingsChoice(
-                PetSoundCategory("dogs"),
-                androidx.compose.ui.res.stringResource(
-                    R.string.settings_category_dogs,
-                ),
+                PetSoundCategories.Dogs,
+                androidx.compose.ui.res.stringResource(R.string.settings_category_dogs)
             ),
             SettingsChoice(
-                PetSoundCategory("cats"),
-                androidx.compose.ui.res.stringResource(
-                    R.string.settings_category_cats,
-                ),
+                PetSoundCategories.Cats,
+                androidx.compose.ui.res.stringResource(R.string.settings_category_cats)
             ),
             SettingsChoice(
-                PetSoundCategory("whistles"),
-                androidx.compose.ui.res.stringResource(
-                    R.string.settings_category_whistles,
-                ),
+                PetSoundCategories.Whistles,
+                androidx.compose.ui.res.stringResource(R.string.settings_category_whistles)
             ),
             SettingsChoice(
-                PetSoundCategory("toys"),
-                androidx.compose.ui.res.stringResource(
-                    R.string.settings_category_toys,
-                ),
+                PetSoundCategories.Toys,
+                androidx.compose.ui.res.stringResource(R.string.settings_category_toys)
             ),
             SettingsChoice(
-                PetSoundCategory("other"),
-                androidx.compose.ui.res.stringResource(
-                    R.string.settings_category_other,
-                ),
-            ),
+                PetSoundCategories.Other,
+                androidx.compose.ui.res.stringResource(R.string.settings_category_other)
+            )
         ),
         onSelected = {
             onAction(

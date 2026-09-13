@@ -3,8 +3,9 @@ package com.civdevops.petcam.domain.usecase.audio
 import com.civdevops.petcam.core.model.audio.PetSoundGain
 import com.civdevops.petcam.core.model.settings.AudioSettings
 import com.civdevops.petcam.core.model.settings.PetSoundVolumeMode
+import javax.inject.Inject
 
-class ResolveEffectiveSoundGainUseCase {
+class ResolveEffectiveSoundGainUseCase @Inject constructor() {
 
     operator fun invoke(settings: AudioSettings): PetSoundGain =
         when (settings.volumeMode) {
